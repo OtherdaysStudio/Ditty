@@ -218,6 +218,30 @@ final class DittyViewModel: ObservableObject {
         if sys.conv != "DitheringCanvas" && sys.conv != "HAM6Canvas" {
             sys.conv = "DitheringCanvas"
         }
+        // Cap the live-mode canvas so per-frame cost stays bounded regardless
+        // of which system is active. Mac 128K is 512×342 (~175k pixels) which
+        // collapses to 1-2fps under real diffusion; capping to a 192-pixel
+        // long edge brings every system into a 30fps budget on iPhone 12+.
+        // Aspect is preserved and block-alignment is respected so cell-aware
+        // systems (in case the swap above didn't trigger) still work.
+        let liveMaxEdge = 192
+        let nativeMax = max(sys.width, sys.height)
+        if nativeMax > liveMaxEdge {
+            let aspect = Double(sys.width) / max(1, Double(sys.height))
+            var newW: Int
+            var newH: Int
+            if sys.width >= sys.height {
+                newW = liveMaxEdge
+                newH = max(1, Int((Double(liveMaxEdge) / aspect).rounded()))
+            } else {
+                newH = liveMaxEdge
+                newW = max(1, Int((Double(liveMaxEdge) * aspect).rounded()))
+            }
+            let blockW = max(1, sys.block?.w ?? 1)
+            let blockH = max(1, sys.block?.h ?? 1)
+            sys.width = ((newW + blockW - 1) / blockW) * blockW
+            sys.height = ((newH + blockH - 1) / blockH) * blockH
+        }
         guard let prepared = ImageBridge.sourcePixels(from: image, target: sys) else { return }
         liveBusy = true
         canvasWidth = sys.width
