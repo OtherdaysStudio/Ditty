@@ -28,3 +28,6 @@ Podfile.lock
 
 # Local-only noise
 *.log
+
+# Local clone of the upstream JS dithertron used as a reference port target
+source-reference/
