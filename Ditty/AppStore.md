@@ -71,8 +71,8 @@ Ditty is a love letter to chunky pixels and bad CRTs. Built in Swift on top
 of the open-source dithertron project. No accounts, no servers, no ads, no
 trackers. Photos and camera frames never leave your device.
 
-Privacy: ditty.otherdays.studio/privacy
-Terms: ditty.otherdays.studio/terms
+Privacy: github.com/OtherdaysStudio/Ditty/blob/main/Ditty/PRIVACY.md
+Terms: github.com/OtherdaysStudio/Ditty/blob/main/Ditty/TERMS.md
 Support: lovish@otherdays.studio
 ```
 
@@ -96,9 +96,10 @@ the app's own content is family-safe)
 
 ## Support / Marketing URL
 
-- Support URL: `https://otherdays.studio/ditty/support` (or `mailto:lovish@otherdays.studio` if you don't want a page)
-- Marketing URL: `https://otherdays.studio/ditty`
-- Privacy Policy URL: `https://otherdays.studio/ditty/privacy`
+- Support URL: `mailto:lovish@otherdays.studio` (or a future page on otherdays.studio)
+- Marketing URL: `https://github.com/OtherdaysStudio/Ditty`
+- Privacy Policy URL: `https://github.com/OtherdaysStudio/Ditty/blob/main/Ditty/PRIVACY.md`
+- Terms (EULA) URL: `https://github.com/OtherdaysStudio/Ditty/blob/main/Ditty/TERMS.md`
 
 ## In-app purchase to register
 
