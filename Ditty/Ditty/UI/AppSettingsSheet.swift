@@ -1,0 +1,221 @@
+import SwiftUI
+import StoreKit
+
+/// Subscription / app-level preferences sheet. Distinct from the inline FX
+/// editor — this is reserved for Pro purchase, restore, and persistent toggles
+/// (saved to UserDefaults).
+struct AppSettingsSheet: View {
+    @ObservedObject var purchase: PurchaseManager
+    @Binding var saveOriginal: Bool
+    @Binding var showGrid: Bool
+    @Binding var shutterSound: Bool
+    @Binding var respectImageRatio: Bool
+    let savedCount: Int
+
+    @State private var showPaywall = false
+    @State private var showShareSheet = false
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    proCard
+                    filmUsageCard
+                    usageSection
+                    contactSection
+                    Text("Ditty · v1.0")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 8)
+                }
+                .padding(20)
+            }
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .accessibilityLabel("Close settings")
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .sheet(isPresented: $showPaywall) {
+            NavigationStack {
+                PaywallView(purchase: purchase)
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareLink(item: URL(string: "https://otherdays.studio/ditty")!,
+                      message: Text("Ditty — retro dithering for your photos"))
+                .presentationDetents([.medium])
+        }
+    }
+
+    // MARK: - Pro card
+
+    private var proCard: some View {
+        HStack(alignment: .center, spacing: 16) {
+            Text("👋")
+                .font(.system(size: 44))
+                .frame(width: 60, height: 60)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+
+            VStack(alignment: .leading, spacing: 4) {
+                if purchase.isPro {
+                    Text("Nice to meet you, PRO")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("All premium features unlocked")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Hello, friend")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("Unlock every system with Ditty Pro")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+            if !purchase.isPro {
+                Button("Get Pro") { showPaywall = true }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.white, in: Capsule())
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    // MARK: - Film usage
+
+    private var filmUsageCard: some View {
+        HStack {
+            Text("Film usage")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+            Spacer()
+            HStack(spacing: 8) {
+                Image(systemName: "leaf.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.5))
+                Text("\(savedCount)")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .monospacedDigit()
+                Image(systemName: "leaf.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .scaleEffect(x: -1, y: 1)
+            }
+        }
+        .padding(16)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    // MARK: - Use section
+
+    private var usageSection: some View {
+        sectionCard(header: "USE") {
+            row(label: "Restore purchases", trailing: chevron) {
+                Task { await purchase.restore() }
+            }
+            divider
+            toggleRow(label: "Save original image", isOn: $saveOriginal)
+            divider
+            toggleRow(label: "Match image ratio", isOn: $respectImageRatio)
+            divider
+            toggleRow(label: "Shutter sound", isOn: $shutterSound)
+            divider
+            toggleRow(label: "Show grid", isOn: $showGrid)
+        }
+    }
+
+    // MARK: - Contact section
+
+    private var contactSection: some View {
+        sectionCard(header: "CONTACT US") {
+            row(label: "Suggestions and Feedback", trailing: chevron) {
+                if let url = URL(string: "mailto:lovish@otherdays.studio") {
+                    UIApplication.shared.open(url)
+                }
+            }
+            divider
+            row(label: "Share Ditty", trailing: chevron) { showShareSheet = true }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func sectionCard<Content: View>(header: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(header)
+                .font(.caption.weight(.medium))
+                .tracking(0.5)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 8)
+            VStack(spacing: 0) { content() }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    private func row(label: String, trailing: AnyView, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                Spacer()
+                trailing
+            }
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func toggleRow(label: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+            Spacer()
+            Toggle("", isOn: isOn)
+                .tint(Color(red: 0.99, green: 0.78, blue: 0.27))
+                .labelsHidden()
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var divider: some View {
+        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+    }
+
+    private var chevron: AnyView {
+        AnyView(
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.5))
+        )
+    }
+}

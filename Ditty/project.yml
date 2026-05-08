@@ -1,0 +1,109 @@
+name: Ditty
+options:
+  bundleIdPrefix: studio.otherdays
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  Lottie:
+    url: https://github.com/airbnb/lottie-ios
+    from: "4.5.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: "7478HZG8H6"
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "Apple Development"
+    ENABLE_PREVIEWS: "YES"
+
+schemes:
+  Ditty:
+    build:
+      targets:
+        Ditty: all
+    run:
+      config: Debug
+      storeKitConfiguration: Ditty.storekit
+    test:
+      config: Debug
+      targets:
+        - DittyTests
+        - DittyUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+targets:
+  Ditty:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Ditty
+      - path: Ditty.storekit
+        buildPhase: none
+    resources:
+      - Ditty/Resources/Assets.xcassets
+      - path: Ditty/Resources/Sample.bundle
+        type: folder
+      - path: Ditty/Resources/Splash.bundle
+        type: folder
+    dependencies:
+      - package: Lottie
+    info:
+      path: Ditty/Info.plist
+      properties:
+        UILaunchScreen:
+          UIColorName: ""
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSPhotoLibraryUsageDescription: "Ditty needs access to your photo library to dither your photos."
+        NSPhotoLibraryAddUsageDescription: "Ditty saves your dithered creation to your photo library."
+        NSCameraUsageDescription: "Ditty uses your camera to apply retro dithering effects in real time."
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1,2"
+        PRODUCT_BUNDLE_IDENTIFIER: studio.otherdays.Ditty
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "1.0"
+  DittyTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: DittyTests
+    dependencies:
+      - target: Ditty
+    settings:
+      base:
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Ditty.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ditty"
+        PRODUCT_BUNDLE_IDENTIFIER: studio.otherdays.DittyTests
+        GENERATE_INFOPLIST_FILE: "YES"
+  DittyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: DittyUITests
+    dependencies:
+      - target: Ditty
+    settings:
+      base:
+        TEST_TARGET_NAME: Ditty
+        PRODUCT_BUNDLE_IDENTIFIER: studio.otherdays.DittyUITests
+        GENERATE_INFOPLIST_FILE: "YES"

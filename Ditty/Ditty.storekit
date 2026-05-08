@@ -1,0 +1,38 @@
+{
+  "identifier" : "B2A6F7E2-3C9E-4A0B-9C12-1D5A5C2E3D44",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : true,
+      "internalID" : "9F4E2A11",
+      "localizations" : [
+        {
+          "description" : "Unlock every retro system: Apple II, Atari ST, Amstrad CPC, MSX, PICO-8, TIC-80, all C-64 FLI variants, and more.",
+          "displayName" : "Ditty Pro",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "studio.otherdays.ditty.pro",
+      "referenceName" : "Ditty Pro",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "0",
+    "_developerTeamID" : "",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 0,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [],
+    "_disableDialogs" : false,
+    "_billingIssuesEnabled" : false,
+    "_billingGracePeriodEnabled" : false
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

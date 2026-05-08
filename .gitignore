@@ -1,0 +1,30 @@
+# Xcode user / project state
+*.xcuserdatad/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+.swiftpm/
+
+# CocoaPods (not used, just future-proofing)
+Pods/
+Podfile.lock
+
+# macOS
+.DS_Store
+
+# Xcode project (regenerated from project.yml via xcodegen)
+*.xcodeproj/
+
+# Build output
+*.ipa
+*.dSYM.zip
+*.app
+
+# Swift Package resolved file lives at .swiftpm/Package.resolved when
+# managed by SwiftPM CLI; Xcode keeps a separate copy. Commit the resolved
+# file so builds are reproducible.
+!Package.resolved
+
+# Local-only noise
+*.log
