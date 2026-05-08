@@ -246,7 +246,13 @@ final class DittyViewModel: ObservableObject {
         // per-cell work dominates. The visible preview is upscaled in the
         // viewport, so the smaller dither still reads correctly.
         let blockAware = (sys.conv != "DitheringCanvas" && sys.conv != "HAM6Canvas")
-        let liveMaxEdge = blockAware ? 96 : 144
+        // Block-aware canvases re-score every cell, so cost scales with
+        // cells = (w/blockW) × (h/blockH). At 64px:
+        //   • 16-block systems (NES) → 4×4 = 16 cells
+        //   • 8-block systems (C-64 multi, ZX, MSX) → 8×8 = 64 cells
+        // Free-palette systems hold 144px since their cost is per-pixel,
+        // and the palette cache keeps reduce out of the hot path.
+        let liveMaxEdge = blockAware ? 64 : 144
         let nativeMax = max(sys.width, sys.height)
         if nativeMax > liveMaxEdge {
             let aspect = Double(sys.width) / max(1, Double(sys.height))
