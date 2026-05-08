@@ -221,29 +221,32 @@ final class DittyViewModel: ObservableObject {
     /// stabilize quickly.
     private func runLivePass(image: UIImage) {
         var sys = makeSettings()
-        // Every block-aware / palette-encoded canvas (NES attribute tiles,
-        // C-64 multicolor, FLI, ZX Spectrum, Apple ][ hibit groups, HAM6
-        // chroma deltas, VCS playfield) re-scores every cell or per-pixel
-        // encoding constraint. For the live camera preview, swap them all
-        // for DitheringCanvas — same palette, vastly faster — so we keep
-        // ~30fps. The captured / static photo path still uses the authentic
-        // engine.
-        if sys.conv != "DitheringCanvas" {
-            sys.conv = "DitheringCanvas"
-        }
-        // Use cached reduced palette across live frames to skip k-means
-        // reduce per frame (the dominant cost on Amiga / Apple IIgs / etc.)
-        // The cache is invalidated by `invalidate()` when system / kernel /
-        // crop / customPalette changes.
+        // KEEP the authentic canvas type — the captured save uses the same
+        // path, so any "swap to DitheringCanvas" optimisation here would
+        // make the visual character (attribute clash, HAM chroma, etc.)
+        // shift the moment the user taps the shutter. Per-frame budget
+        // stays manageable thanks to:
+        //   • palette cache below — k-means reduce only runs once per system
+        //   • saliency skip — 50ms/frame Vision call is bypassed in live
+        //   • 144px canvas cap — keeps total pixel work bounded
+        // The static / captured pass still runs at full system resolution.
+
+        // Cached reduced palette across live frames lets reduce-using systems
+        // (Amiga, Apple IIgs, Atari ST, Game Boy Color, Astrocade) skip the
+        // k-means pass on every frame. Cache invalidates on system/kernel/
+        // diversity changes via `invalidate()`.
         if customPalette == nil, sys.reduce != nil,
            let cached = liveCachedPalette[systemId] {
             sys.customPalette = cached
             sys.reduce = nil
         }
         // Cap the live-mode canvas so per-frame cost stays bounded regardless
-        // of which system is active. The visible preview is upscaled in the
-        // viewport, so a smaller dither still looks correct.
-        let liveMaxEdge = 144
+        // of which system is active. Block-aware canvases (cell scoring is
+        // O(cells)) get a tighter cap than free-palette ones, since their
+        // per-cell work dominates. The visible preview is upscaled in the
+        // viewport, so the smaller dither still reads correctly.
+        let blockAware = (sys.conv != "DitheringCanvas" && sys.conv != "HAM6Canvas")
+        let liveMaxEdge = blockAware ? 96 : 144
         let nativeMax = max(sys.width, sys.height)
         if nativeMax > liveMaxEdge {
             let aspect = Double(sys.width) / max(1, Double(sys.height))
@@ -289,9 +292,11 @@ final class DittyViewModel: ObservableObject {
                 iter = msg.iterationCount
                 pal = msg.pal
             }
-            for _ in 0..<2 {
-                // Bail before each iteration if the system changed under us —
-                // the new system's frame will start fresh.
+            // Block-aware canvases iterate cell scoring per pass — single iter
+            // is plenty for live preview. Free-palette systems benefit from the
+            // second pass (kernel + refinement).
+            let liveIters = blockAware ? 1 : 2
+            for _ in 0..<liveIters {
                 if myGen != self.generation { break }
                 if !local.iterate() { break }
             }
