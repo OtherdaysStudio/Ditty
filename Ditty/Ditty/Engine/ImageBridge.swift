@@ -37,9 +37,12 @@ enum ImageBridge {
     /// The output array length is exactly `width * height`, matching the engine's `[UInt32]` layout.
     /// `cropRect` is normalized 0...1 in source coords (top-left origin); when supplied,
     /// the source is hard-cropped to that rect before scaling and the smart-crop step is skipped.
+    /// `useSaliency: false` disables the per-call Vision saliency lookup — required for the
+    /// live camera path, where saliency would burn ~50ms per frame.
     static func sourcePixels(from image: UIImage,
                              target: DithertronSettings,
-                             cropRect: CGRect? = nil) -> (pixels: [UInt32], width: Int, height: Int)? {
+                             cropRect: CGRect? = nil,
+                             useSaliency: Bool = true) -> (pixels: [UInt32], width: Int, height: Int)? {
         guard var cg = image.cgImage else { return nil }
         if let r = cropRect {
             let imgW = CGFloat(cg.width), imgH = CGFloat(cg.height)
@@ -81,10 +84,13 @@ enum ImageBridge {
         let drawW = imgW * scale
         let drawH = imgH * scale
 
-        // Use saliency-based smart crop instead of pure center crop. The
-        // center comes back in source-image pixel coords, so we translate to
-        // canvas coords by scaling and re-anchoring.
-        let center = smartCropCenter(cg)
+        // Saliency-based smart crop for static / captured photos. For the
+        // live camera path (`useSaliency: false`) we just center-crop —
+        // Vision was costing ~50ms a frame, dominating the engine cost on
+        // every system.
+        let center: CGPoint = useSaliency
+            ? smartCropCenter(cg)
+            : CGPoint(x: imgW / 2, y: imgH / 2)
         let scaledCx = center.x * scale
         let scaledCy = center.y * scale
         var x = CGFloat(w) / 2 - scaledCx

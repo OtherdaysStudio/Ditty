@@ -29,6 +29,10 @@ final class DittyViewModel: ObservableObject {
     private func invalidate(clearPreview: Bool = false) {
         generation &+= 1
         liveBusy = false
+        // The cached palette becomes stale whenever any param affecting
+        // reduce changes (system / kernel won't help it but diversity
+        // would). Clearing here is the simplest correct invalidation.
+        liveCachedPalette.removeAll(keepingCapacity: true)
         if clearPreview {
             previewImage = nil
             iterationCount = 0
@@ -104,6 +108,13 @@ final class DittyViewModel: ObservableObject {
     /// iOS an Int read is atomic, and a stale read just costs one extra
     /// iteration which is harmless.
     nonisolated(unsafe) private var generation: Int = 0
+
+    /// Per-system cache of the reduced palette, populated on the first live
+    /// frame for that system and reused for subsequent frames. Skips the
+    /// k-means reduce pass (the dominant cost for systems with `reduce`,
+    /// e.g. Amiga Lores, Apple IIgs, Atari ST). Cleared when systemId
+    /// changes or the user customises the palette.
+    private var liveCachedPalette: [String: [UInt32]] = [:]
 
     // MARK: - Public input
 
@@ -210,21 +221,29 @@ final class DittyViewModel: ObservableObject {
     /// stabilize quickly.
     private func runLivePass(image: UIImage) {
         var sys = makeSettings()
-        // Block-aware canvases (NES attribute tiles, C-64 multicolor, FLI,
-        // ZX Spectrum, Apple ][ hibit groups, etc.) iterate slowly because
-        // they re-score every cell. For the live camera preview, swap them
-        // for the simple DitheringCanvas so we keep ~30fps. The captured /
-        // static photo path still uses the authentic block-aware engine.
-        if sys.conv != "DitheringCanvas" && sys.conv != "HAM6Canvas" {
+        // Every block-aware / palette-encoded canvas (NES attribute tiles,
+        // C-64 multicolor, FLI, ZX Spectrum, Apple ][ hibit groups, HAM6
+        // chroma deltas, VCS playfield) re-scores every cell or per-pixel
+        // encoding constraint. For the live camera preview, swap them all
+        // for DitheringCanvas — same palette, vastly faster — so we keep
+        // ~30fps. The captured / static photo path still uses the authentic
+        // engine.
+        if sys.conv != "DitheringCanvas" {
             sys.conv = "DitheringCanvas"
         }
+        // Use cached reduced palette across live frames to skip k-means
+        // reduce per frame (the dominant cost on Amiga / Apple IIgs / etc.)
+        // The cache is invalidated by `invalidate()` when system / kernel /
+        // crop / customPalette changes.
+        if customPalette == nil, sys.reduce != nil,
+           let cached = liveCachedPalette[systemId] {
+            sys.customPalette = cached
+            sys.reduce = nil
+        }
         // Cap the live-mode canvas so per-frame cost stays bounded regardless
-        // of which system is active. Mac 128K is 512×342 (~175k pixels) which
-        // collapses to 1-2fps under real diffusion; capping to a 192-pixel
-        // long edge brings every system into a 30fps budget on iPhone 12+.
-        // Aspect is preserved and block-alignment is respected so cell-aware
-        // systems (in case the swap above didn't trigger) still work.
-        let liveMaxEdge = 192
+        // of which system is active. The visible preview is upscaled in the
+        // viewport, so a smaller dither still looks correct.
+        let liveMaxEdge = 144
         let nativeMax = max(sys.width, sys.height)
         if nativeMax > liveMaxEdge {
             let aspect = Double(sys.width) / max(1, Double(sys.height))
@@ -242,12 +261,19 @@ final class DittyViewModel: ObservableObject {
             sys.width = ((newW + blockW - 1) / blockW) * blockW
             sys.height = ((newH + blockH - 1) / blockH) * blockH
         }
-        guard let prepared = ImageBridge.sourcePixels(from: image, target: sys) else { return }
+        guard let prepared = ImageBridge.sourcePixels(
+            from: image,
+            target: sys,
+            cropRect: cropRect,
+            useSaliency: false
+        ) else { return }
         liveBusy = true
         canvasWidth = sys.width
         canvasHeight = sys.height
         canvasScaleX = sys.scaleX
         let myGen = generation
+        let didReduce = sys.customPalette == nil && currentSystem().reduce != nil
+        let cacheKey = systemId
 
         workQueue.async { [weak self] in
             guard let self = self else { return }
@@ -289,6 +315,11 @@ final class DittyViewModel: ObservableObject {
                     self.iterationCount = iter
                     self.isFinal = false
                     self.activePalette = pal.map { $0 & 0x00ffffff }
+                    // Cache the reduced palette so subsequent live frames
+                    // for this system can skip the expensive reduce step.
+                    if didReduce, !pal.isEmpty {
+                        self.liveCachedPalette[cacheKey] = pal
+                    }
                 }
                 self.liveBusy = false
             }
