@@ -143,7 +143,7 @@ struct EffectEditor: View {
 
     private var scrubberRange: ClosedRange<Double> {
         switch activeParam {
-        case .diffuse:           return 0...1.5
+        case .diffuse:           return 0...1
         case .ordered:           return 0...1
         case .noise:             return 0...8
         case .diversity:         return 0...2

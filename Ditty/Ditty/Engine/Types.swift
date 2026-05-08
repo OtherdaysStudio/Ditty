@@ -75,7 +75,9 @@ struct DithertronSettings: Identifiable, Hashable {
     /// aspect ratio (the "respect image ratio" mode in settings).
     var width: Int
     var height: Int
-    let conv: String
+    /// Mutable so the live camera path can swap block-aware canvases for the
+    /// generic DitheringCanvas (cheaper per frame, see `runLivePass`).
+    var conv: String
     let pal: [UInt32]
 
     var scaleX: Double = 1.0

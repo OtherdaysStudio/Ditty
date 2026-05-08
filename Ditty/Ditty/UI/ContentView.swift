@@ -66,7 +66,10 @@ struct ContentView: View {
                 photoViewport
                     .padding(.horizontal, 20)
 
-                Spacer(minLength: 16)
+                systemPicker
+                    .padding(.top, 12)
+
+                Spacer(minLength: 12)
 
                 if editingEffects {
                     EffectEditor(
@@ -234,6 +237,66 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - System picker carousel
+    //
+    // Always-visible horizontal pill row of every system. Tapping a pill jumps
+    // straight to that system without the swipe-through dance. Pro-locked
+    // systems show a small lock badge and route through the paywall.
+
+    private var systemPicker: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(orderedSystems) { sys in
+                        systemPill(sys)
+                            .id(sys.id)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .onAppear {
+                proxy.scrollTo(vm.systemId, anchor: .center)
+            }
+            .onChange(of: vm.systemId) { newId in
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(newId, anchor: .center)
+                }
+            }
+        }
+    }
+
+    private func systemPill(_ sys: DithertronSettings) -> some View {
+        let active = sys.id == vm.systemId
+        let locked = !purchase.isPro && !FreeSystems.isFree(sys.id)
+        return Button {
+            if locked {
+                showPaywall = true
+            } else {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                vm.systemId = sys.id
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(sys.name)
+                    .font(.system(.footnote, design: .monospaced)
+                        .weight(active ? .semibold : .regular))
+                    .lineLimit(1)
+                if locked {
+                    Image(systemName: "lock.fill")
+                        .font(.caption2)
+                }
+            }
+            .foregroundStyle(active ? .white : Color.black.opacity(0.7))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                active ? Color.black : Color.black.opacity(0.05),
+                in: Capsule()
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Photo viewport (live preview + swipe)
 
     private var photoViewport: some View {
@@ -248,11 +311,15 @@ struct ContentView: View {
 
                 Group {
                     if let img = vm.previewImage {
+                        // Fill the entire viewport — crop any overflow from
+                        // mismatched aspect. The outline + corner radius are
+                        // preserved by clipping at the viewport bounds.
                         Image(uiImage: img)
                             .interpolation(.none)
                             .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .padding(8)
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
                     } else if camera.isRunning && !noCameraFeed {
                         ProgressView()
                     } else {

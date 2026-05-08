@@ -209,7 +209,15 @@ final class DittyViewModel: ObservableObject {
     /// preview because the canvas is tiny (160×144 etc.) and ordered/Floyd kernels
     /// stabilize quickly.
     private func runLivePass(image: UIImage) {
-        let sys = makeSettings()
+        var sys = makeSettings()
+        // Block-aware canvases (NES attribute tiles, C-64 multicolor, FLI,
+        // ZX Spectrum, Apple ][ hibit groups, etc.) iterate slowly because
+        // they re-score every cell. For the live camera preview, swap them
+        // for the simple DitheringCanvas so we keep ~30fps. The captured /
+        // static photo path still uses the authentic block-aware engine.
+        if sys.conv != "DitheringCanvas" && sys.conv != "HAM6Canvas" {
+            sys.conv = "DitheringCanvas"
+        }
         guard let prepared = ImageBridge.sourcePixels(from: image, target: sys) else { return }
         liveBusy = true
         canvasWidth = sys.width
