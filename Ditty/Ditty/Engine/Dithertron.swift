@@ -110,6 +110,8 @@ private func makeCanvas(named conv: String,
         return TeletextCanvas(img: img, width: width, pal: pal, sys: sys)
     case "VCSColorPlayfieldCanvas":
         return VCSColorPlayfieldCanvas(img: img, width: width, pal: pal, sys: sys)
+    case "VCSInterlacedCanvas":
+        return VCSInterlacedCanvas(img: img, width: width, pal: pal, sys: sys)
     case "HAM6Canvas":
         return HAM6Canvas(img: img, width: width, pal: pal, sys: sys)
     default:

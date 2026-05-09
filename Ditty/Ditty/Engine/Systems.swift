@@ -105,6 +105,13 @@ enum Systems {
             scaleX: 6
         ),
         DithertronSettings(
+            id: "vcs.color.il", name: "Atari VCS (Interlaced)",
+            width: 40, height: 192,
+            conv: "VCSInterlacedCanvas",
+            pal: Palettes.vcs,
+            scaleX: 6
+        ),
+        DithertronSettings(
             id: "astrocade", name: "Bally Astrocade",
             width: 160, height: 98,
             conv: "DitheringCanvas",

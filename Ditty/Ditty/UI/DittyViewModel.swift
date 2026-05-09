@@ -300,11 +300,7 @@ final class DittyViewModel: ObservableObject {
             let preview = UIImage(cgImage: cg)
             DispatchQueue.main.async {
                 if myGen == self.generation {
-                    // Soft cross-fade between successive live frames hides
-                    // the engine's slower update rate on heavier systems.
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        self.previewImage = preview
-                    }
+                    self.previewImage = preview
                     self.iterationCount = iter
                     self.isFinal = false
                     self.activePalette = pal.map { $0 & 0x00ffffff }
