@@ -141,9 +141,31 @@ issues.
 
 Data collected: **None**.
 
-If asked for "Data Used to Track You", select **None**.
-If asked for "Data Linked to You", select **None**.
-If asked for "Data Not Linked to You", select **None**.
+In App Store Connect → **App Privacy** → click **Get Started** and walk
+through the wizard:
 
-(Photos and camera input are processed on device only; we do not use any
-analytics, advertising, or crash-reporting SDKs.)
+1. "Does this app collect data from this app?" → **No, we do not collect
+   data from this app.**
+2. Click **Publish** at the top right when prompted.
+
+That single answer covers all three categories ("Used to Track", "Linked
+to You", "Not Linked to You"). Photos and camera input are processed on
+device; no analytics, no advertising, no crash-reporting SDKs are wired in.
+
+## App Preview video (optional but recommended)
+
+App Previews boost install conversion ~25% on the App Store. To shoot one
+in ~10 minutes:
+
+1. Plug your iPhone into your Mac, open **QuickTime Player → File → New
+   Movie Recording**, set the source to your iPhone.
+2. Open Ditty, point the camera at something visually interesting.
+3. Record ~15 seconds: live dither on Game Boy, swipe to NES, swipe to
+   ZX Spectrum, tap shutter to capture, tap save → save it.
+4. Trim in QuickTime: **Edit → Trim** to 15-30s. Apple accepts 15-30s.
+5. Export at 1080p (QuickTime → Export As → 1080p).
+6. Upload in App Store Connect → version page → **Previews and
+   Screenshots** → drag into the 6.9" iPhone Preview slot.
+
+Optional polish: add a 1-frame fade in/out in QuickTime via duplicating
+the start/end frames at low opacity.

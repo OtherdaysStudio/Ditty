@@ -59,7 +59,8 @@ struct EffectEditor: View {
                 TickScrubber(
                     value: scrubberBinding,
                     range: scrubberRange,
-                    centerReference: scrubberCenter
+                    centerReference: scrubberCenter,
+                    voLabel: paramTitle(activeParam)
                 )
                 .frame(height: 56)
             }
@@ -180,6 +181,8 @@ struct EffectEditor: View {
                             .background(active ? Color.white : Color.white.opacity(0.08), in: Capsule())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("\(k.name) kernel")
+                    .accessibilityAddTraits(active ? [.isSelected, .isButton] : [.isButton])
                 }
             }
             .padding(.horizontal, 4)
@@ -251,6 +254,9 @@ struct EffectEditor: View {
                         in: RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title) palette, \(colors.count) colors")
+        .accessibilityAddTraits(active ? [.isSelected, .isButton] : [.isButton])
     }
 
     private func paletteMatchesPreset(_ preset: PalettePreset) -> Bool {
@@ -336,6 +342,8 @@ struct TickScrubber: View {
     let range: ClosedRange<Double>
     /// Reference value highlighted by a brighter tick (Apple uses this for "0"/default).
     let centerReference: Double
+    /// Optional descriptive label exposed to VoiceOver (e.g. "Diffuse").
+    var voLabel: String = "Value"
 
     @State private var dragStartValue: Double?
 
@@ -384,6 +392,17 @@ struct TickScrubber: View {
                     }
                     .onEnded { _ in dragStartValue = nil }
             )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(voLabel)
+            .accessibilityValue(String(format: "%.2f", value))
+            .accessibilityAdjustableAction { direction in
+                let step = (range.upperBound - range.lowerBound) / 20
+                switch direction {
+                case .increment: value = min(range.upperBound, value + step)
+                case .decrement: value = max(range.lowerBound, value - step)
+                @unknown default: break
+                }
+            }
         }
     }
 

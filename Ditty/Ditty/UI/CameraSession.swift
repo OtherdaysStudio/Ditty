@@ -80,7 +80,11 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     /// Soft FPS cap — the engine costs more than the camera. The dither
     /// pipeline drops frames it can't keep up with via `liveBusy`, so we publish
     /// up to 30fps to feel responsive while letting the engine self-throttle.
-    var targetFPS: Double = 30
+    /// Drops to 12fps automatically when the device is in Low Power Mode so
+    /// we don't drain the battery while iOS is asking apps to ease up.
+    var targetFPS: Double {
+        ProcessInfo.processInfo.isLowPowerModeEnabled ? 12 : 30
+    }
 
     private let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()

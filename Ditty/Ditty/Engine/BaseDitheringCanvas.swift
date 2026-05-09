@@ -29,10 +29,11 @@ class BaseDitheringCanvas {
 
     var params: [UInt32] = []
 
-    /// RGB → palette index memo cache. Populated as pixels are processed; reset
-    /// at the start of every iterate() pass. Only used when `getValidColors()`
-    /// returns the full palette (the free-palette systems), since per-cell
-    /// constraint subsets would otherwise produce stale hits.
+    /// RGB → palette index memo cache. Persists across all iterations of a
+    /// canvas's lifetime — the palette doesn't change while a single
+    /// Dithertron is alive, so cached lookups remain valid. Only consulted
+    /// when `getValidColors()` returns the full palette (free-palette
+    /// systems); block-aware canvases short-circuit past it.
     private var closestCache: [UInt32: Int] = [:]
     /// Cached "is full palette" decision for the current frame (set in iterate()).
     fileprivate var fullPaletteCache: Bool = false
@@ -83,7 +84,6 @@ class BaseDitheringCanvas {
         // it'd be unsafe.
         let valid = getValidColors(0)
         fullPaletteCache = (valid.count == pal.count) && Array(0..<pal.count) == valid
-        closestCache.removeAll(keepingCapacity: true)
         for i in 0..<img.count {
             update(i)
         }

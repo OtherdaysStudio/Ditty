@@ -65,31 +65,39 @@ struct AppSettingsSheet: View {
 
     private var proCard: some View {
         HStack(alignment: .center, spacing: 16) {
-            Text("👋")
-                .font(.system(size: 44))
-                .frame(width: 60, height: 60)
-                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(purchase.isPro
+                          ? Color(red: 0.99, green: 0.78, blue: 0.27).opacity(0.18)
+                          : Color.white.opacity(0.06))
+                Image(systemName: purchase.isPro ? "star.circle.fill" : "tv.inset.filled")
+                    .font(.system(size: 30))
+                    .foregroundStyle(purchase.isPro
+                                     ? Color(red: 0.99, green: 0.78, blue: 0.27)
+                                     : Color.white.opacity(0.7))
+            }
+            .frame(width: 60, height: 60)
 
             VStack(alignment: .leading, spacing: 4) {
                 if purchase.isPro {
-                    Text("Nice to meet you, PRO")
+                    Text("Ditty Pro")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text("All premium features unlocked")
+                    Text("Every system unlocked. Thank you.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Hello, friend")
+                    Text("Get Ditty Pro")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text("Unlock every system with Ditty Pro")
+                    Text("One-time unlock for every retro system.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)
             if !purchase.isPro {
-                Button("Get Pro") { showPaywall = true }
+                Button("Unlock") { showPaywall = true }
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.black)
                     .padding(.horizontal, 14)

@@ -34,7 +34,10 @@ private struct LottieFile: UIViewRepresentable {
         animationView.contentMode = .scaleAspectFit
         animationView.translatesAutoresizingMaskIntoConstraints = false
         animationView.loopMode = .playOnce
-        animationView.animationSpeed = 1.0
+        // Original Jitter export runs ~6s; bumping speed gets us to ~2.5s,
+        // which keeps the brand mark visible long enough to register without
+        // delaying first interaction.
+        animationView.animationSpeed = 2.4
         host.addSubview(animationView)
         NSLayoutConstraint.activate([
             animationView.leadingAnchor.constraint(equalTo: host.leadingAnchor),

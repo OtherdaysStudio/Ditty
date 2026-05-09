@@ -6,7 +6,7 @@ final class DittyUITests: XCTestCase {
     /// in the simulator surfaces a system alert; we dismiss it and confirm the controls exist.
     func testLaunchAndChrome() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["-DisableCamera", "-SkipSplash"]
+        app.launchArguments += ["-DisableCamera", "-SkipSplash", "-SkipOnboarding"]
         app.launch()
 
         // Splash plays for ~2s — let it finish before we look for chrome.
@@ -26,7 +26,7 @@ final class DittyUITests: XCTestCase {
     /// Settings tap toggles the inline effect editor (no covering sheet).
     func testEffectEditorOpens() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["-DisableCamera", "-SkipSplash"]
+        app.launchArguments += ["-DisableCamera", "-SkipSplash", "-SkipOnboarding"]
         app.launch()
         XCTAssertTrue(app.staticTexts["DITTY"].waitForExistence(timeout: 8))
 

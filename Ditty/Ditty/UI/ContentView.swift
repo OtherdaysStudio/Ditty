@@ -1,5 +1,6 @@
 import SwiftUI
 import AudioToolbox
+import AVFoundation
 
 struct ContentView: View {
     @StateObject private var vm = DittyViewModel()
@@ -15,6 +16,7 @@ struct ContentView: View {
     @State private var showCropEditor = false
     @State private var shutterFlash: Bool = false
     @State private var viewportScale: CGFloat = 1.0
+    @State private var shareItem: UIImage? = nil
     @State private var showSavedToast = false
     @State private var systemBadgeOpacity: Double = 0
     @State private var dragOffset: CGFloat = 0
@@ -30,6 +32,8 @@ struct ContentView: View {
     /// false, the canvas uses each system's native aspect (more authentic to
     /// the original hardware but crops portrait phone photos).
     @AppStorage("ditty.respectImageRatio") private var respectImageRatio: Bool = true
+    @AppStorage("ditty.didShowOnboarding") private var didShowOnboarding: Bool = false
+    @State private var showOnboarding: Bool = false
 
     /// True when the user is viewing a captured shot or a gallery-uploaded photo
     /// (i.e. not the live camera feed).
@@ -106,6 +110,11 @@ struct ContentView: View {
                     .allowsHitTesting(false)
             }
 
+            if showOnboarding {
+                OnboardingOverlay(isPresented: $showOnboarding)
+                    .transition(.opacity)
+            }
+
             if camera.permissionDenied {
                 permissionScrim
             }
@@ -161,12 +170,33 @@ struct ContentView: View {
                 UIImageWriteToSavedPhotosAlbum(rendered, nil, nil, nil)
                 savedCount += 1
                 showToast()
+                // Stash the rendered image so the share sheet (presented next)
+                // can hand it to whatever destination the user picks.
+                shareItem = rendered
             }
             .presentationDetents([.medium])
+        }
+        .sheet(item: Binding(
+            get: { shareItem.map { ShareItem(image: $0) } },
+            set: { shareItem = $0?.image }
+        )) { item in
+            ShareSheet(items: [item.image])
+                .presentationDetents([.medium, .large])
         }
         .task {
             vm.respectImageRatio = respectImageRatio
             await purchase.bootstrap()
+            #if DEBUG
+            let skipOnboarding = ProcessInfo.processInfo.arguments.contains("-SkipOnboarding")
+            #else
+            let skipOnboarding = false
+            #endif
+            if !didShowOnboarding && !skipOnboarding {
+                // Tiny delay so the splash dismissal lands first.
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                withAnimation(.easeIn(duration: 0.25)) { showOnboarding = true }
+                didShowOnboarding = true
+            }
 
             #if DEBUG
             // Debug-only helpers used by tests and ad-hoc QA. Compiled out of
@@ -333,16 +363,23 @@ struct ContentView: View {
                             .aspectRatio(contentMode: .fill)
                             .frame(width: geo.size.width, height: geo.size.height)
                             .clipShape(RoundedRectangle(cornerRadius: 20))
+                    } else if vm.sourceImage != nil {
+                        // Have an input but the engine hasn't produced a
+                        // dither yet — covers the ~200ms after a system
+                        // switch with a fresh palette reduce.
+                        ProgressView()
+                            .tint(Color.black.opacity(0.6))
+                            .scaleEffect(1.2)
                     } else if camera.isRunning && !noCameraFeed {
                         ProgressView()
                     } else {
                         VStack(spacing: 10) {
-                            Image(systemName: noCameraFeed ? "camera.fill.badge.ellipsis" : "camera.viewfinder")
+                            Image(systemName: noCameraFeed ? "photo.stack" : "camera.viewfinder")
                                 .font(.system(size: 44))
-                                .foregroundStyle(Color.black.opacity(0.4))
+                                .foregroundStyle(Color.black.opacity(0.35))
                             Text(noCameraFeed
-                                 ? "No camera feed.\nTap the gallery icon to pick a photo."
-                                 : "Starting camera…")
+                                 ? "Looking for the camera.\nUpload a photo from your library to get started."
+                                 : "Warming up the camera…")
                                 .font(.footnote)
                                 .multilineTextAlignment(.center)
                                 .foregroundStyle(Color.black.opacity(0.55))
@@ -529,15 +566,15 @@ struct ContentView: View {
                 Image(systemName: "camera.fill")
                     .font(.system(size: 44))
                     .foregroundStyle(.white)
-                Text("Camera access denied")
+                Text("Camera off")
                     .font(.headline)
                     .foregroundStyle(.white)
-                Text("Enable camera access in Settings to use Ditty live, or pick from your gallery.")
+                Text("Ditty needs camera access for live retro effects. You can also dither photos straight from your library.")
                     .font(.footnote)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.8))
                     .padding(.horizontal, 40)
-                Button("Pick from Gallery") { showPicker = true }
+                Button("Pick from Library") { showPicker = true }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.regular)
                     .padding(.top, 8)
@@ -554,11 +591,19 @@ struct ContentView: View {
 
     /// Camera shutter "snap": white flash (in fast, out slower), a tiny scale
     /// punch on the photo viewport, and the system's camera-shutter sound
-    /// (suppressed if the user has Shutter Sound off in settings).
+    /// (suppressed if the user has Shutter Sound off in settings, and routed
+    /// through an .ambient audio session so the device's silent switch
+    /// silences it where the law allows).
     private func triggerShutterEffect() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         if shutterSound {
-            // 1108 = the system camera shutter SystemSoundID
+            // Configure an ambient session so the silent switch suppresses
+            // the sound (App Store conduct policy doesn't require the
+            // shutter sound outside JP/KR; users in those regions still get
+            // it because the system's 1108 SystemSoundID is mandatory there
+            // regardless of session category).
+            try? AVAudioSession.sharedInstance().setCategory(.ambient, options: [])
+            try? AVAudioSession.sharedInstance().setActive(true, options: [])
             AudioServicesPlaySystemSound(1108)
         }
         withAnimation(.easeIn(duration: 0.05)) {
@@ -829,6 +874,13 @@ private extension Array {
         guard indices.contains(index) else { return nil }
         return self[index]
     }
+}
+
+/// Lightweight Identifiable wrapper so the share sheet's `.sheet(item:)` can
+/// reuse the same UIImage value type without forcing UIImage to be Identifiable.
+private struct ShareItem: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }
 
 #Preview {
