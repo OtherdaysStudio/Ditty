@@ -21,6 +21,16 @@ final class DittyViewModel: ObservableObject {
     /// Per-system tuning presets. When set, switching to that system restores
     /// the saved FX values. Public so UI can save/reset.
     let presetStore = SystemFXPresetStore()
+    /// User-built palettes — shared across the FX editor (apply / edit) and
+    /// the Settings sheet (delete in bulk).
+    let paletteStore = CustomPaletteStore()
+
+    init() {
+        // didSet on systemId only fires when the value *changes* — at launch
+        // it stays at "gb" so any saved preset for the initial system would
+        // never be applied. Force-apply once after init.
+        applyPresetIfAny(for: systemId)
+    }
     @Published var ditherKernelId: String = "floyd" { didSet { invalidate() } }
     @Published var diffuse: Double = 0.8 { didSet { invalidate() } }
     @Published var ordered: Double = 0.0 { didSet { invalidate() } }
@@ -90,6 +100,10 @@ final class DittyViewModel: ObservableObject {
     @Published private(set) var previewImage: UIImage? = nil
     @Published private(set) var iterationCount: Int = 0
     @Published private(set) var isFinal: Bool = false
+    /// True while the engine is iterating against the current source. Cleared
+    /// when the engine converges (`isFinal == true`) or there's nothing to
+    /// process. UI can show a "still cooking" spinner while this is true.
+    @Published private(set) var isProcessing: Bool = false
     @Published private(set) var canvasWidth: Int = 0
     @Published private(set) var canvasHeight: Int = 0
     @Published private(set) var canvasScaleX: Double = 1.0
@@ -223,6 +237,8 @@ final class DittyViewModel: ObservableObject {
         canvasScaleX = sys.scaleX
         iterationCount = 0
         isFinal = false
+        // The engine takes a moment to converge — UI hangs a spinner on this.
+        isProcessing = true
 
         workItem?.cancel()
         let myGen = generation
@@ -249,6 +265,7 @@ final class DittyViewModel: ObservableObject {
                     self.previewImage = image
                     self.iterationCount = msg.iterationCount
                     self.isFinal = msg.final
+                    if msg.final { self.isProcessing = false }
                     self.activePalette = msg.pal.map { $0 & 0x00ffffff }
                 }
             }
@@ -256,6 +273,10 @@ final class DittyViewModel: ObservableObject {
         while local.iterate() {
             // Bail mid-converge if the user changed system/kernel/etc.
             if gen != generation { return }
+        }
+        // Bailed out of the loop without an explicit isFinal — clear processing.
+        DispatchQueue.main.async {
+            if gen == self.generation { self.isProcessing = false }
         }
     }
 

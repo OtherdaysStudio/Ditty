@@ -6,6 +6,8 @@ import StoreKit
 /// (saved to UserDefaults).
 struct AppSettingsSheet: View {
     @ObservedObject var purchase: PurchaseManager
+    @ObservedObject var presetStore: SystemFXPresetStore
+    @ObservedObject var paletteStore: CustomPaletteStore
     @Binding var saveOriginal: Bool
     @Binding var showGrid: Bool
     @Binding var shutterSound: Bool
@@ -17,6 +19,12 @@ struct AppSettingsSheet: View {
     @State private var showShareSheet = false
     @Environment(\.dismiss) private var dismiss
 
+    /// System-id → display-name map so Preset Management can show "Game Boy"
+    /// instead of "gb".
+    private var systemNamesById: [String: String] {
+        Dictionary(uniqueKeysWithValues: Systems.all.map { ($0.id, $0.name) })
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -24,8 +32,10 @@ struct AppSettingsSheet: View {
                     proCard
                     filmUsageCard
                     usageSection
+                    presetsSection
+                    palettesSection
                     contactSection
-                    Text("Ditty · v1.0")
+                    Text("Ditty · v1.1")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, 8)
@@ -162,11 +172,11 @@ struct AppSettingsSheet: View {
     private var watermarkRow: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Stamp exports")
+                Text("Watermark")
                     .font(.subheadline)
                     .foregroundStyle(.white)
                 if !purchase.isPro {
-                    Text("Pro · turn off the watermark")
+                    Text("Pro unlocks the toggle")
                         .font(.caption2)
                         .foregroundStyle(Color(red: 0.99, green: 0.78, blue: 0.27))
                 }
@@ -192,6 +202,122 @@ struct AppSettingsSheet: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    // MARK: - Per-system presets
+
+    private var presetsSection: some View {
+        sectionCard(header: "PER-SYSTEM PRESETS") {
+            let entries = presetStore.presets
+                .sorted { lhs, rhs in
+                    (systemNamesById[lhs.key] ?? lhs.key) < (systemNamesById[rhs.key] ?? rhs.key)
+                }
+            if entries.isEmpty {
+                emptyHint("Save a preset from the FX panel and it will appear here.")
+            } else {
+                ForEach(entries, id: \.key) { entry in
+                    presetRow(systemId: entry.key, preset: entry.value)
+                    if entry.key != entries.last?.key { divider }
+                }
+            }
+        }
+    }
+
+    private func presetRow(systemId: String, preset: SystemFXPreset) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(systemNamesById[systemId] ?? systemId)
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                Text("kernel · \(preset.ditherKernelId) · diffuse \(String(format: "%.2f", preset.diffuse)) · diversity \(String(format: "%.2f", preset.diversity))")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+            }
+            Spacer()
+            Button(role: .destructive) {
+                presetStore.reset(systemId: systemId)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .padding(8)
+                    .background(Color.red.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete \(systemNamesById[systemId] ?? systemId) preset")
+        }
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - Custom palettes
+
+    private var palettesSection: some View {
+        sectionCard(header: "CUSTOM PALETTES") {
+            let palettes = paletteStore.palettes
+            if palettes.isEmpty {
+                emptyHint("Build a palette from the FX panel's palette tab.")
+            } else {
+                ForEach(palettes) { p in
+                    paletteRow(p)
+                    if p.id != palettes.last?.id { divider }
+                }
+            }
+        }
+    }
+
+    private func paletteRow(_ palette: UserPalette) -> some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 0) {
+                ForEach(Array(palette.colors.prefix(8).enumerated()), id: \.offset) { _, c in
+                    Rectangle()
+                        .fill(swiftUIColor(from: c))
+                        .frame(width: 8, height: 18)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(palette.name)
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                Text("\(palette.colors.count) colors")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Spacer()
+            Button(role: .destructive) {
+                paletteStore.remove(palette.id)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .padding(8)
+                    .background(Color.red.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete \(palette.name) palette")
+        }
+        .padding(.vertical, 10)
+    }
+
+    private func swiftUIColor(from rgb: UInt32) -> Color {
+        // Engine packs colors in BGR order (R in lowest byte). Match the
+        // EffectEditor's swatches so the rows look consistent.
+        Color(red: Double(rgb & 0xff) / 255,
+              green: Double((rgb >> 8) & 0xff) / 255,
+              blue: Double((rgb >> 16) & 0xff) / 255)
+    }
+
+    private func emptyHint(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.55))
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Contact section

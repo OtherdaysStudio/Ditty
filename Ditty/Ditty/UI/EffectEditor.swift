@@ -15,7 +15,20 @@ struct EffectEditor: View {
     let onCancel: () -> Void
     let onCommit: () -> Void
 
-    @StateObject private var paletteStore = CustomPaletteStore()
+    /// Shared palette store — same instance owned by `DittyViewModel`, so
+    /// edits/deletes from the Settings sheet stay in sync with the editor.
+    /// Observed here so palette additions repaint the swatch row.
+    @ObservedObject private var paletteStoreObserver: CustomPaletteStore
+    private var paletteStore: CustomPaletteStore { paletteStoreObserver }
+
+    init(vm: DittyViewModel,
+         onCancel: @escaping () -> Void,
+         onCommit: @escaping () -> Void) {
+        self.vm = vm
+        self.onCancel = onCancel
+        self.onCommit = onCommit
+        self._paletteStoreObserver = ObservedObject(wrappedValue: vm.paletteStore)
+    }
 
     @State private var activeParam: FXParam = .diffuse
 

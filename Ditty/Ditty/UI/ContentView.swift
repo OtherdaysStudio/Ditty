@@ -154,6 +154,8 @@ struct ContentView: View {
         .sheet(isPresented: $showAppSettings) {
             AppSettingsSheet(
                 purchase: purchase,
+                presetStore: vm.presetStore,
+                paletteStore: vm.paletteStore,
                 saveOriginal: $saveOriginal,
                 showGrid: $showGrid,
                 shutterSound: $shutterSound,
@@ -199,9 +201,13 @@ struct ContentView: View {
                 UIImageWriteToSavedPhotosAlbum(rendered, nil, nil, nil)
                 savedCount += 1
                 showToast()
-                // Stash the rendered image so the share sheet (presented next)
-                // can hand it to whatever destination the user picks.
-                shareItem = rendered
+                // Defer presenting the share sheet until the export sheet has
+                // fully dismissed — chaining two `.sheet(item:)` modifiers
+                // alongside `.sheet(isPresented:)` race-conditions otherwise
+                // (the share sheet flickers open/closed in a loop).
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    shareItem = rendered
+                }
             }
             .presentationDetents([.medium])
         }
@@ -281,13 +287,22 @@ struct ContentView: View {
         .onReceive(vm.$previewImage.compactMap { $0 }) { image in
             recorder.appendIfNeeded(image)
         }
-        // Once a GIF finishes encoding, kick off the share sheet.
+        // Once a GIF finishes encoding, kick off the share sheet (after a
+        // brief delay so any other dismissing sheet has fully unmounted).
         .onReceive(recorder.$lastEncodedURL.compactMap { $0 }) { url in
-            recordedGIFURL = url
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                recordedGIFURL = url
+                recorder.consumeLastEncodedURL()
+            }
         }
         // When the burst completes, drop the user into the share sheet.
+        // Tiny delay matches the export → share handoff so SwiftUI doesn't
+        // race two sheet bindings.
         .onReceive(burst.$contactSheet.compactMap { $0 }) { image in
-            shareItem = image
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                shareItem = image
+                burst.consumeContactSheet()
+            }
         }
         .onChange(of: respectImageRatio) { newValue in
             vm.respectImageRatio = newValue
@@ -485,6 +500,34 @@ struct ContentView: View {
                     GridOverlay()
                         .padding(8)
                         .allowsHitTesting(false)
+                }
+
+                // Subtle "still cooking" pill while the engine re-converges
+                // after a system/FX change. Only shown for static photos —
+                // live mode runs one iteration per frame and never sets
+                // isProcessing for long enough to be useful.
+                if vm.isProcessing, vm.previewImage != nil {
+                    VStack {
+                        HStack {
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .controlSize(.small)
+                                    .tint(.white)
+                                Text("Dithering…")
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.black.opacity(0.55), in: Capsule())
+                            Spacer()
+                        }
+                        .padding(10)
+                        Spacer()
+                    }
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
                 }
 
                 // Floating "Crop" pill — visible only when viewing a still.

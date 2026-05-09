@@ -45,6 +45,12 @@ final class BurstCapture: ObservableObject {
         }
     }
 
+    /// Clear the published contact sheet — call this once the value has been
+    /// handed to the share sheet so re-renders don't keep re-presenting.
+    func consumeContactSheet() {
+        contactSheet = nil
+    }
+
     func cancel() {
         timer?.invalidate()
         timer = nil

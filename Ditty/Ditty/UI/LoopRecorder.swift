@@ -26,6 +26,12 @@ final class LoopRecorder: ObservableObject {
     private var startedAt: Date?
     private var timer: Timer?
 
+    /// Clear the last-encoded URL after the share sheet picks it up, so
+    /// re-renders don't keep re-presenting it.
+    func consumeLastEncodedURL() {
+        lastEncodedURL = nil
+    }
+
     func start() {
         guard !isRecording else { return }
         frames.removeAll(keepingCapacity: true)
