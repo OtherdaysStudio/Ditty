@@ -38,6 +38,8 @@ struct AppSettingsSheet: View {
                         .foregroundStyle(.secondary)
                         .padding(.top, 8)
                 }
+                .frame(maxWidth: 540)
+                .frame(maxWidth: .infinity)
                 .padding(20)
             }
             .background(Color.black.ignoresSafeArea())

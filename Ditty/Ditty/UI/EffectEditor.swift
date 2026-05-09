@@ -79,35 +79,42 @@ struct EffectEditor: View {
     }
 
     var body: some View {
-        VStack(spacing: 18) {
-            valueRow
+        // Outer wrap keeps the black bottom-sheet background full-width on
+        // iPad; inner column caps controls at iPhone-shaped width so the
+        // tick scrubber and pills don't span half a screen.
+        VStack {
+            VStack(spacing: 18) {
+                valueRow
 
-            switch activeParam {
-            case .kernel:
-                kernelChips
+                switch activeParam {
+                case .kernel:
+                    kernelChips
+                        .frame(height: 56)
+                case .palette:
+                    paletteSwatches
+                        .frame(height: 56)
+                default:
+                    TickScrubber(
+                        value: scrubberBinding,
+                        range: scrubberRange,
+                        centerReference: scrubberCenter,
+                        voLabel: paramTitle(activeParam)
+                    )
                     .frame(height: 56)
-            case .palette:
-                paletteSwatches
-                    .frame(height: 56)
-            default:
-                TickScrubber(
-                    value: scrubberBinding,
-                    range: scrubberRange,
-                    centerReference: scrubberCenter,
-                    voLabel: paramTitle(activeParam)
-                )
-                .frame(height: 56)
+                }
+
+                paramPills
+
+                presetRow
+
+                actionRow
             }
-
-            paramPills
-
-            presetRow
-
-            actionRow
+            .frame(maxWidth: 540)
+            .padding(.horizontal, 24)
+            .padding(.top, 18)
+            .padding(.bottom, 26)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 18)
-        .padding(.bottom, 26)
+        .frame(maxWidth: .infinity)
         .background(Color.black)
         .preferredColorScheme(.dark)
         .onAppear {

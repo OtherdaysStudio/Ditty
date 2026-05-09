@@ -85,6 +85,11 @@ struct ContentView: View {
         ZStack {
             Color.white.ignoresSafeArea()
 
+            // The whole UI is laid out for an iPhone-shaped column. On iPad
+            // we center that column inside the (much wider) screen so the
+            // viewport and controls don't stretch awkwardly into negative
+            // space. iPhone layouts are unaffected — `min(.infinity, 540)`
+            // collapses to the screen width.
             VStack(spacing: 0) {
                 topBar
                     .padding(.top, 8)
@@ -113,6 +118,8 @@ struct ContentView: View {
                         .padding(.bottom, 24)
                 }
             }
+            .frame(maxWidth: 540)
+            .frame(maxWidth: .infinity)
 
             if showSavedToast {
                 Text("Saved to Photos")

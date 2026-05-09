@@ -60,7 +60,8 @@ struct OnboardingOverlay: View {
                 .padding(.top, 16)
             }
 
-            // Bottom nav: page dots + primary CTA.
+            // Bottom nav: page dots + primary CTA. Centered + capped so the
+            // CTA doesn't span the entire iPad width.
             VStack(spacing: 18) {
                 Spacer()
                 HStack(spacing: 8) {
@@ -89,6 +90,8 @@ struct OnboardingOverlay: View {
                 .padding(.horizontal, 32)
                 .padding(.bottom, 28)
             }
+            .frame(maxWidth: 540)
+            .frame(maxWidth: .infinity)
         }
         .preferredColorScheme(.dark)
     }
@@ -110,6 +113,9 @@ private struct OnboardingCard: View {
     let card: Card
 
     var body: some View {
+        // Constrain the card column to phone-width on iPad so the
+        // illustration doesn't stretch into a wide ribbon and the body copy
+        // doesn't span 1000pt of line length.
         VStack(spacing: 0) {
             Spacer(minLength: 24)
 
@@ -139,6 +145,8 @@ private struct OnboardingCard: View {
             // Reserve space for the bottom nav so cards don't jump.
             Color.clear.frame(height: 140)
         }
+        .frame(maxWidth: 540)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
