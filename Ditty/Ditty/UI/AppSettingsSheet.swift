@@ -7,7 +7,6 @@ import StoreKit
 struct AppSettingsSheet: View {
     @ObservedObject var purchase: PurchaseManager
     @ObservedObject var presetStore: SystemFXPresetStore
-    @ObservedObject var paletteStore: CustomPaletteStore
     @Binding var saveOriginal: Bool
     @Binding var showGrid: Bool
     @Binding var shutterSound: Bool
@@ -33,7 +32,6 @@ struct AppSettingsSheet: View {
                     filmUsageCard
                     usageSection
                     presetsSection
-                    palettesSection
                     contactSection
                     Text("Ditty · v1.1")
                         .font(.caption2)
@@ -248,68 +246,6 @@ struct AppSettingsSheet: View {
             .accessibilityLabel("Delete \(systemNamesById[systemId] ?? systemId) preset")
         }
         .padding(.vertical, 10)
-    }
-
-    // MARK: - Custom palettes
-
-    private var palettesSection: some View {
-        sectionCard(header: "CUSTOM PALETTES") {
-            let palettes = paletteStore.palettes
-            if palettes.isEmpty {
-                emptyHint("Build a palette from the FX panel's palette tab.")
-            } else {
-                ForEach(palettes) { p in
-                    paletteRow(p)
-                    if p.id != palettes.last?.id { divider }
-                }
-            }
-        }
-    }
-
-    private func paletteRow(_ palette: UserPalette) -> some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 0) {
-                ForEach(Array(palette.colors.prefix(8).enumerated()), id: \.offset) { _, c in
-                    Rectangle()
-                        .fill(swiftUIColor(from: c))
-                        .frame(width: 8, height: 18)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
-            )
-            VStack(alignment: .leading, spacing: 2) {
-                Text(palette.name)
-                    .font(.subheadline)
-                    .foregroundStyle(.white)
-                Text("\(palette.colors.count) colors")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-            Spacer()
-            Button(role: .destructive) {
-                paletteStore.remove(palette.id)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .padding(8)
-                    .background(Color.red.opacity(0.12), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Delete \(palette.name) palette")
-        }
-        .padding(.vertical, 10)
-    }
-
-    private func swiftUIColor(from rgb: UInt32) -> Color {
-        // Engine packs colors in BGR order (R in lowest byte). Match the
-        // EffectEditor's swatches so the rows look consistent.
-        Color(red: Double(rgb & 0xff) / 255,
-              green: Double((rgb >> 8) & 0xff) / 255,
-              blue: Double((rgb >> 16) & 0xff) / 255)
     }
 
     private func emptyHint(_ text: String) -> some View {

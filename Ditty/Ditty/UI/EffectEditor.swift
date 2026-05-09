@@ -39,6 +39,10 @@ struct EffectEditor: View {
     /// .new = build from scratch. .edit(id) = edit an existing user palette.
     @State private var builder: BuilderTarget? = nil
 
+    /// Toggles the preset picker sheet — lets the user jump to any saved
+    /// per-system preset.
+    @State private var showPresetPicker: Bool = false
+
     private enum BuilderTarget: Identifiable {
         case new
         case edit(UserPalette)
@@ -387,28 +391,56 @@ struct EffectEditor: View {
 
     private var presetRow: some View {
         let saved = vm.hasPresetForCurrent()
-        return HStack(spacing: 10) {
-            Image(systemName: "bookmark\(saved ? ".fill" : "")")
-                .font(.caption)
-                .foregroundStyle(saved ? Color(red: 0.99, green: 0.78, blue: 0.27) : .white.opacity(0.5))
-            Text(saved ? "Saved \(vm.currentSystem().name) preset" : "\(vm.currentSystem().name) preset")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.7))
-                .lineLimit(1)
+        let presetCount = vm.presetStore.presets.count
+        return HStack(spacing: 8) {
+            // Browse-presets button — opens the picker sheet listing every
+            // saved per-system preset. Disabled with a hint when empty.
+            Button {
+                if presetCount > 0 {
+                    showPresetPicker = true
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "bookmark\(saved ? ".fill" : "")")
+                        .font(.caption2)
+                    Text("Presets")
+                        .font(.caption.weight(.medium))
+                    if presetCount > 0 {
+                        Text("\(presetCount)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.black.opacity(0.55))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.white.opacity(0.6), in: Capsule())
+                    }
+                }
+                .foregroundStyle(presetCount > 0 ? .black : .white.opacity(0.4))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(presetCount > 0 ? Color.white : Color.white.opacity(0.06),
+                            in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Browse saved presets")
+            .disabled(presetCount == 0)
+
             Spacer()
+
             Button {
                 vm.saveCurrentAsPreset()
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
             } label: {
                 Text(saved ? "Update" : "Save")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.white, in: Capsule())
+                    .background(Color.white.opacity(0.12), in: Capsule())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Save preset for current system")
+
             if saved {
                 Button {
                     vm.resetPreset()
@@ -418,11 +450,15 @@ struct EffectEditor: View {
                         .foregroundStyle(.white.opacity(0.7))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.white.opacity(0.08), in: Capsule())
+                        .background(Color.white.opacity(0.06), in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Reset preset for current system")
             }
+        }
+        .sheet(isPresented: $showPresetPicker) {
+            PresetPickerSheet(vm: vm)
+                .presentationDetents([.medium, .large])
         }
     }
 

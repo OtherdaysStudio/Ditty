@@ -155,7 +155,6 @@ struct ContentView: View {
             AppSettingsSheet(
                 purchase: purchase,
                 presetStore: vm.presetStore,
-                paletteStore: vm.paletteStore,
                 saveOriginal: $saveOriginal,
                 showGrid: $showGrid,
                 shutterSound: $shutterSound,
