@@ -61,6 +61,10 @@ targets:
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Ditty uses only Apple's stock cryptography (StoreKit, NSURLSession
+        # HTTPS) — qualifies for the standard export-compliance exemption, so
+        # no documentation upload is required.
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen:
           UIColorName: LaunchBackground
         UIRequiresFullScreen: true
@@ -80,7 +84,7 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: "16.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        CURRENT_PROJECT_VERSION: 11
+        CURRENT_PROJECT_VERSION: 12
         MARKETING_VERSION: "1.1"
   DittyTests:
     type: bundle.unit-test
