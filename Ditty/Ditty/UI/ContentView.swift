@@ -1,4 +1,5 @@
 import SwiftUI
+import AudioToolbox
 
 struct ContentView: View {
     @StateObject private var vm = DittyViewModel()
@@ -12,6 +13,8 @@ struct ContentView: View {
     @State private var showExportSheet = false
     @State private var showSystemPicker = false
     @State private var showCropEditor = false
+    @State private var shutterFlash: Bool = false
+    @State private var viewportScale: CGFloat = 1.0
     @State private var showSavedToast = false
     @State private var systemBadgeOpacity: Double = 0
     @State private var dragOffset: CGFloat = 0
@@ -65,6 +68,7 @@ struct ContentView: View {
 
                 photoViewport
                     .padding(.horizontal, 20)
+                    .scaleEffect(viewportScale)
 
                 systemPicker
                     .padding(.top, 12)
@@ -91,6 +95,15 @@ struct ContentView: View {
                     .padding(.vertical, 10)
                     .background(.thinMaterial, in: Capsule())
                     .transition(.opacity)
+            }
+
+            // Shutter flash — full-screen white veneer that fades in fast,
+            // out a touch slower, mimicking a physical shutter's blink.
+            if shutterFlash {
+                Color.white
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
             }
 
             if camera.permissionDenied {
@@ -490,10 +503,7 @@ struct ContentView: View {
                     guard vm.previewImage != nil else { return }
                     showExportSheet = true
                 } else {
-                    // Capture the live frame. If the user opted in to "Save
-                    // original", write the full-res camera frame to Photos
-                    // immediately at capture time (not at export) — they get
-                    // the un-dithered shot the moment they shoot.
+                    triggerShutterEffect()
                     if saveOriginal, let original = camera.fullResFrame {
                         UIImageWriteToSavedPhotosAlbum(original, nil, nil, nil)
                     }
@@ -539,6 +549,29 @@ struct ContentView: View {
         withAnimation { showSavedToast = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
             withAnimation { showSavedToast = false }
+        }
+    }
+
+    /// Camera shutter "snap": white flash (in fast, out slower), a tiny scale
+    /// punch on the photo viewport, and the system's camera-shutter sound
+    /// (suppressed if the user has Shutter Sound off in settings).
+    private func triggerShutterEffect() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        if shutterSound {
+            // 1108 = the system camera shutter SystemSoundID
+            AudioServicesPlaySystemSound(1108)
+        }
+        withAnimation(.easeIn(duration: 0.05)) {
+            shutterFlash = true
+            viewportScale = 0.97
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            withAnimation(.easeOut(duration: 0.22)) {
+                shutterFlash = false
+            }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.65)) {
+                viewportScale = 1.0
+            }
         }
     }
 }
