@@ -21,7 +21,11 @@ final class DittyViewModel: ObservableObject {
     @Published var diffuse: Double = 0.8 { didSet { invalidate() } }
     @Published var ordered: Double = 0.0 { didSet { invalidate() } }
     @Published var noise: Int = 0 { didSet { invalidate() } }
-    @Published var paletteDiversity: Double = 0.0 { didSet { invalidate() } }
+    /// Diversity defaults to 1.0 across every system — empirically the value
+    /// where reduced palettes spread enough to keep highlights, midtones and
+    /// shadows visually distinct. Users can still scrub it from 0…2 in the
+    /// FX editor.
+    @Published var paletteDiversity: Double = 1.0 { didSet { invalidate() } }
 
     /// Bump the engine generation so any in-flight iteration on the work
     /// queue bails on its next check, free the live-busy flag so the next
