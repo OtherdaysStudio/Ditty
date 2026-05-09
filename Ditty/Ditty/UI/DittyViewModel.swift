@@ -14,9 +14,13 @@ final class DittyViewModel: ObservableObject {
             // System switch is the most disruptive change — clear the preview
             // so the user sees instant feedback instead of the old system's
             // dither lingering while the new one converges.
+            applyPresetIfAny(for: systemId)
             invalidate(clearPreview: true)
         }
     }
+    /// Per-system tuning presets. When set, switching to that system restores
+    /// the saved FX values. Public so UI can save/reset.
+    let presetStore = SystemFXPresetStore()
     @Published var ditherKernelId: String = "floyd" { didSet { invalidate() } }
     @Published var diffuse: Double = 0.8 { didSet { invalidate() } }
     @Published var ordered: Double = 0.0 { didSet { invalidate() } }
@@ -168,6 +172,43 @@ final class DittyViewModel: ObservableObject {
 
     func currentSystem() -> DithertronSettings {
         return Systems.lookup[systemId] ?? Systems.all[0]
+    }
+
+    /// Save the current FX values as the preset for this system.
+    func saveCurrentAsPreset() {
+        let preset = SystemFXPreset(
+            ditherKernelId: ditherKernelId,
+            diffuse: diffuse,
+            ordered: ordered,
+            noise: noise,
+            diversity: paletteDiversity
+        )
+        presetStore.save(systemId: systemId, preset: preset)
+    }
+
+    /// Drop the saved preset for this system and return to engine defaults.
+    func resetPreset() {
+        presetStore.reset(systemId: systemId)
+    }
+
+    /// True if the user has saved a preset for the current system.
+    func hasPresetForCurrent() -> Bool {
+        presetStore.preset(for: systemId) != nil
+    }
+
+    /// Apply the saved preset for `systemId`, if any. Bypasses the didSet
+    /// triggers' invalidate so we don't double-restart — the caller in
+    /// `systemId.didSet` already invalidates after this returns.
+    private func applyPresetIfAny(for systemId: String) {
+        guard let preset = presetStore.preset(for: systemId) else { return }
+        // Setting these triggers their own invalidate() but the upcoming
+        // systemId-driven invalidate clears everything anyway — extra cycles
+        // are harmless.
+        ditherKernelId = preset.ditherKernelId
+        diffuse = preset.diffuse
+        ordered = preset.ordered
+        noise = preset.noise
+        paletteDiversity = preset.diversity
     }
 
     // MARK: - Convergence (static photo flow)

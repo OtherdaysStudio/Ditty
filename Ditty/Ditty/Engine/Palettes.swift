@@ -173,6 +173,17 @@ enum Palettes {
     static let atariST: [UInt32] = generateRGBPalette(3, 3, 3)
     static let teletext: [UInt32] = generateRGBPalette(1, 1, 1)
     static let rgb444: [UInt32] = generateRGBPalette(4, 4, 4)
+    /// MSX2 V9938 — 9-bit RGB (R3G3B3 = 512 colors). Screen 5/8 used a fixed
+    /// 16-color register-set palette out of this gamut.
+    static let msx2: [UInt32] = generateRGBPalette(3, 3, 3)
+    /// Atari Lynx — 16 software-selectable colors out of a 12-bit RGB444 gamut.
+    static let lynx: [UInt32] = rgb444
+    /// Vectrex was a vector-driven monochrome CRT with a phosphor-green glow.
+    /// We approximate the look with two values: black + phosphor green.
+    static let vectrex: [UInt32] = [
+        RGB(0, 0, 0),
+        RGB(120, 230, 110)
+    ]
     static let gameboyColor: [UInt32] = rgb444
     static let amigaOCS: [UInt32] = rgb444
     static let iigs: [UInt32] = rgb444

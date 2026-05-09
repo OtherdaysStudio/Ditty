@@ -10,6 +10,7 @@ struct AppSettingsSheet: View {
     @Binding var showGrid: Bool
     @Binding var shutterSound: Bool
     @Binding var respectImageRatio: Bool
+    @Binding var watermarkEnabled: Bool
     let savedCount: Int
 
     @State private var showPaywall = false
@@ -151,7 +152,46 @@ struct AppSettingsSheet: View {
             toggleRow(label: "Shutter sound", isOn: $shutterSound)
             divider
             toggleRow(label: "Show grid", isOn: $showGrid)
+            divider
+            // Free users see the toggle but it's locked-on with a Pro badge.
+            // Pro users get full control.
+            watermarkRow
         }
+    }
+
+    private var watermarkRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Stamp exports")
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                if !purchase.isPro {
+                    Text("Pro · turn off the watermark")
+                        .font(.caption2)
+                        .foregroundStyle(Color(red: 0.99, green: 0.78, blue: 0.27))
+                }
+            }
+            Spacer()
+            if purchase.isPro {
+                Toggle("", isOn: $watermarkEnabled)
+                    .tint(Color(red: 0.99, green: 0.78, blue: 0.27))
+                    .labelsHidden()
+            } else {
+                // Locked-on for free users: show a static "ON" with a lock.
+                HStack(spacing: 4) {
+                    Image(systemName: "lock.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.6))
+                    Text("ON")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Color.white.opacity(0.08), in: Capsule())
+            }
+        }
+        .padding(.vertical, 8)
     }
 
     // MARK: - Contact section

@@ -46,6 +46,17 @@ final class CameraSession: ObservableObject {
         streamer.setPosition(position == .back ? .back : .front)
     }
 
+    /// Set the lens zoom factor. Clamped to [1, maxSupported] inside the streamer.
+    func setZoom(_ factor: CGFloat) {
+        streamer.setZoom(factor)
+    }
+
+    /// Run focus + exposure at a normalized point on the active camera (0,0 top-left,
+    /// 1,1 bottom-right in the captured image's coordinate space).
+    func focus(at normalizedPoint: CGPoint) {
+        streamer.focus(at: normalizedPoint)
+    }
+
     private func ensurePermissionAndStart() async {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
@@ -121,6 +132,47 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
             self.reconfigureInputs()
             self.session.commitConfiguration()
         }
+    }
+
+    func setZoom(_ factor: CGFloat) {
+        captureQueue.async { [weak self] in
+            guard let self = self,
+                  let device = self.activeDevice() else { return }
+            do {
+                try device.lockForConfiguration()
+                let clamped = max(device.minAvailableVideoZoomFactor,
+                                  min(factor, min(device.maxAvailableVideoZoomFactor, 8)))
+                device.videoZoomFactor = clamped
+                device.unlockForConfiguration()
+            } catch { /* device busy — ignore */ }
+        }
+    }
+
+    func focus(at normalizedPoint: CGPoint) {
+        captureQueue.async { [weak self] in
+            guard let self = self,
+                  let device = self.activeDevice() else { return }
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusPointOfInterestSupported {
+                    device.focusPointOfInterest = normalizedPoint
+                }
+                if device.isFocusModeSupported(.autoFocus) {
+                    device.focusMode = .autoFocus
+                }
+                if device.isExposurePointOfInterestSupported {
+                    device.exposurePointOfInterest = normalizedPoint
+                }
+                if device.isExposureModeSupported(.autoExpose) {
+                    device.exposureMode = .autoExpose
+                }
+                device.unlockForConfiguration()
+            } catch { /* device busy — ignore */ }
+        }
+    }
+
+    private func activeDevice() -> AVCaptureDevice? {
+        return AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: currentPosition)
     }
 
     private func configure() {

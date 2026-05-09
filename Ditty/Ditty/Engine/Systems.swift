@@ -173,11 +173,46 @@ enum Systems {
             reduce: 4
         ),
         DithertronSettings(
+            id: "bbcmicro.mode1", name: "BBC Micro (Mode 1)",
+            width: 320, height: 256,
+            conv: "DitheringCanvas",
+            pal: Palettes.teletext,
+            reduce: 4
+        ),
+        DithertronSettings(
             id: "bbcmicro.mode2", name: "BBC Micro (Mode 2)",
             width: 160, height: 256,
             conv: "DitheringCanvas",
             pal: Palettes.teletext,
             scaleX: 2
+        ),
+        DithertronSettings(
+            id: "bbcmicro.mode5", name: "BBC Micro (Mode 5)",
+            width: 160, height: 256,
+            conv: "DitheringCanvas",
+            pal: Palettes.teletext,
+            scaleX: 2,
+            reduce: 4
+        ),
+        DithertronSettings(
+            id: "msx2.screen5", name: "MSX2 (Screen 5)",
+            width: 256, height: 212,
+            conv: "DitheringCanvas",
+            pal: Palettes.msx2,
+            reduce: 16
+        ),
+        DithertronSettings(
+            id: "lynx", name: "Atari Lynx",
+            width: 160, height: 102,
+            conv: "DitheringCanvas",
+            pal: Palettes.lynx,
+            reduce: 16
+        ),
+        DithertronSettings(
+            id: "vectrex", name: "Vectrex",
+            width: 330, height: 410,
+            conv: "DitheringCanvas",
+            pal: Palettes.vectrex
         ),
         DithertronSettings(
             id: "phomemo.landscape", name: "Phomemo D30 (landscape)",

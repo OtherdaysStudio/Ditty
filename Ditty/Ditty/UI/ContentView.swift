@@ -6,6 +6,9 @@ struct ContentView: View {
     @StateObject private var vm = DittyViewModel()
     @StateObject private var purchase = PurchaseManager()
     @StateObject private var camera = CameraSession()
+    @StateObject private var favorites = SystemFavorites()
+    @StateObject private var recorder = LoopRecorder()
+    @StateObject private var burst = BurstCapture()
 
     @State private var showPicker = false
     @State private var editingEffects = false
@@ -13,14 +16,27 @@ struct ContentView: View {
     @State private var showPaywall = false
     @State private var showExportSheet = false
     @State private var showSystemPicker = false
+    @State private var showSampleLibrary = false
     @State private var showCropEditor = false
     @State private var shutterFlash: Bool = false
     @State private var viewportScale: CGFloat = 1.0
     @State private var shareItem: UIImage? = nil
+    @State private var recordedGIFURL: URL? = nil
     @State private var showSavedToast = false
     @State private var systemBadgeOpacity: Double = 0
     @State private var dragOffset: CGFloat = 0
     @State private var noCameraFeed = false
+
+    // Live-camera gestures: pinch zoom + tap-to-focus.
+    @State private var zoomFactor: CGFloat = 1.0
+    @State private var pinchStartZoom: CGFloat? = nil
+    @State private var focusRing: FocusRingState? = nil
+
+    private struct FocusRingState: Identifiable, Equatable {
+        let id = UUID()
+        let position: CGPoint
+        let createdAt: Date = .init()
+    }
 
     // Persisted preferences shown in the AppSettingsSheet.
     @AppStorage("ditty.saveOriginal") private var saveOriginal: Bool = false
@@ -32,6 +48,9 @@ struct ContentView: View {
     /// false, the canvas uses each system's native aspect (more authentic to
     /// the original hardware but crops portrait phone photos).
     @AppStorage("ditty.respectImageRatio") private var respectImageRatio: Bool = true
+    /// Stamp every export with a small "DITTY · <system>" tag. Free users have
+    /// this forced on; Pro users can toggle it off in Settings.
+    @AppStorage("ditty.watermark") private var watermarkEnabled: Bool = true
     @AppStorage("ditty.didShowOnboarding") private var didShowOnboarding: Bool = false
     @State private var showOnboarding: Bool = false
 
@@ -42,9 +61,12 @@ struct ContentView: View {
     }
 
     private var orderedSystems: [DithertronSettings] {
-        let free = vm.systems.filter { FreeSystems.isFree($0.id) }
-        let pro = vm.systems.filter { !FreeSystems.isFree($0.id) }
-        return free + pro
+        // Favorites float to the very front, then free systems, then pro.
+        let favs = vm.systems.filter { favorites.contains($0.id) }
+        let nonFav = vm.systems.filter { !favorites.contains($0.id) }
+        let free = nonFav.filter { FreeSystems.isFree($0.id) }
+        let pro = nonFav.filter { !FreeSystems.isFree($0.id) }
+        return favs + free + pro
     }
 
     private var currentIndex: Int {
@@ -136,6 +158,7 @@ struct ContentView: View {
                 showGrid: $showGrid,
                 shutterSound: $shutterSound,
                 respectImageRatio: $respectImageRatio,
+                watermarkEnabled: $watermarkEnabled,
                 savedCount: savedCount
             )
         }
@@ -149,6 +172,9 @@ struct ContentView: View {
                     onClear: { vm.cropRect = nil }
                 )
             }
+        }
+        .sheet(isPresented: $showSampleLibrary) {
+            SampleLibrarySheet { vm.setImage($0) }
         }
         .sheet(isPresented: $showSystemPicker) {
             SystemPickerSheet(
@@ -164,9 +190,12 @@ struct ContentView: View {
         .sheet(isPresented: $showExportSheet) {
             ExportOptionsSheet(image: vm.previewImage) { aspect in
                 showExportSheet = false
-                guard let img = vm.previewImage,
-                      let rendered = ExportRenderer.render(img, aspect: aspect)
-                else { return }
+                guard let img = vm.previewImage else { return }
+                // Free users always get the watermark; Pro users honor the toggle.
+                let mark: String? = (purchase.isPro && !watermarkEnabled)
+                    ? nil
+                    : "DITTY · \(currentSystem.name)"
+                guard let rendered = ExportRenderer.render(img, aspect: aspect, watermark: mark) else { return }
                 UIImageWriteToSavedPhotosAlbum(rendered, nil, nil, nil)
                 savedCount += 1
                 showToast()
@@ -181,6 +210,13 @@ struct ContentView: View {
             set: { shareItem = $0?.image }
         )) { item in
             ShareSheet(items: [item.image])
+                .presentationDetents([.medium, .large])
+        }
+        .sheet(item: Binding(
+            get: { recordedGIFURL.map { GIFItem(url: $0) } },
+            set: { recordedGIFURL = $0?.url }
+        )) { item in
+            ShareSheet(items: [item.url])
                 .presentationDetents([.medium, .large])
         }
         .task {
@@ -240,6 +276,19 @@ struct ContentView: View {
             // the highest fidelity available.
             vm.ingestLiveFrame(image, fullRes: camera.fullResFrame)
         }
+        // Pipe each newly dithered preview into recorder + burst (no-ops when
+        // those features aren't active).
+        .onReceive(vm.$previewImage.compactMap { $0 }) { image in
+            recorder.appendIfNeeded(image)
+        }
+        // Once a GIF finishes encoding, kick off the share sheet.
+        .onReceive(recorder.$lastEncodedURL.compactMap { $0 }) { url in
+            recordedGIFURL = url
+        }
+        // When the burst completes, drop the user into the share sheet.
+        .onReceive(burst.$contactSheet.compactMap { $0 }) { image in
+            shareItem = image
+        }
         .onChange(of: respectImageRatio) { newValue in
             vm.respectImageRatio = newValue
         }
@@ -250,7 +299,8 @@ struct ContentView: View {
     private var topBar: some View {
         HStack {
             // Top-left: gallery-add by default; becomes a back arrow while the
-            // user is viewing a captured/uploaded still.
+            // user is viewing a captured/uploaded still. Long-press the
+            // gallery icon to jump to bundled sample images.
             CircleIconButton(
                 iconAsset: isViewingStill ? "icon-back" : "icon-gallery-add",
                 accessibilityLabel: isViewingStill ? "Back to camera" : "Upload from gallery"
@@ -258,9 +308,16 @@ struct ContentView: View {
                 if isViewingStill {
                     vm.resumeLive()
                     vm.sourceImage = nil
+                    zoomFactor = 1.0
+                    camera.setZoom(1.0)
                 } else {
                     showPicker = true
                 }
+            }
+            .onLongPressGesture(minimumDuration: 0.45) {
+                guard !isViewingStill else { return }
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                showSampleLibrary = true
             }
 
             Spacer()
@@ -311,6 +368,7 @@ struct ContentView: View {
     private func systemPill(_ sys: DithertronSettings) -> some View {
         let active = sys.id == vm.systemId
         let locked = !purchase.isPro && !FreeSystems.isFree(sys.id)
+        let starred = favorites.contains(sys.id)
         return Button {
             if locked {
                 showPaywall = true
@@ -320,6 +378,11 @@ struct ContentView: View {
             }
         } label: {
             HStack(spacing: 6) {
+                if starred {
+                    Image(systemName: "star.fill")
+                        .font(.caption2)
+                        .foregroundStyle(active ? Color(red: 0.99, green: 0.78, blue: 0.27) : Color(red: 0.99, green: 0.78, blue: 0.27))
+                }
                 Text(sys.name)
                     .font(.system(.footnote, design: .monospaced)
                         .weight(active ? .semibold : .regular))
@@ -338,6 +401,12 @@ struct ContentView: View {
             )
         }
         .buttonStyle(.plain)
+        // Long-press: toggle favorite. Free + Pro systems alike — favoriting
+        // a Pro system still surfaces the lock badge until the user upgrades.
+        .onLongPressGesture(minimumDuration: 0.45) {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            favorites.toggle(sys.id)
+        }
     }
 
     // MARK: - Photo viewport (live preview + swipe)
@@ -378,12 +447,36 @@ struct ContentView: View {
                                 .font(.system(size: 44))
                                 .foregroundStyle(Color.black.opacity(0.35))
                             Text(noCameraFeed
-                                 ? "Looking for the camera.\nUpload a photo from your library to get started."
+                                 ? "No camera feed.\nUpload a photo or try a sample."
                                  : "Warming up the camera…")
                                 .font(.footnote)
                                 .multilineTextAlignment(.center)
                                 .foregroundStyle(Color.black.opacity(0.55))
                                 .padding(.horizontal, 16)
+                            if noCameraFeed {
+                                HStack(spacing: 10) {
+                                    Button { showPicker = true } label: {
+                                        Label("Upload", systemImage: "photo.fill.on.rectangle.fill")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.black)
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 8)
+                                            .background(Color.black.opacity(0.05), in: Capsule())
+                                            .foregroundStyle(.black)
+                                    }
+                                    .buttonStyle(.plain)
+                                    Button { showSampleLibrary = true } label: {
+                                        Label("Samples", systemImage: "sparkles")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 8)
+                                            .background(Color.black, in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.top, 4)
+                            }
                         }
                     }
                 }
@@ -438,17 +531,72 @@ struct ContentView: View {
                     }
                     .opacity(systemBadgeOpacity)
                 }
+
+                // Zoom badge — visible briefly while pinching.
+                if !isViewingStill, zoomFactor > 1.05 {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Text(String(format: "%.1f×", zoomFactor))
+                                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(.black.opacity(0.55), in: Capsule())
+                                .padding(10)
+                        }
+                        Spacer()
+                    }
+                }
+
+                // Tap-to-focus ring — animated yellow ring at tap location.
+                if let ring = focusRing {
+                    FocusRingView()
+                        .position(x: ring.position.x, y: ring.position.y)
+                        .id(ring.id)
+                        .allowsHitTesting(false)
+                }
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .contentShape(RoundedRectangle(cornerRadius: 20))
             .gesture(swipeGesture)
+            .simultaneousGesture(pinchGesture)
             .onLongPressGesture(minimumDuration: 0.45) {
                 let generator = UIImpactFeedbackGenerator(style: .medium)
                 generator.impactOccurred()
                 showSystemPicker = true
             }
+            .onTapGesture { location in
+                guard !isViewingStill else { return }
+                let normalized = CGPoint(
+                    x: max(0, min(1, location.x / max(1, geo.size.width))),
+                    y: max(0, min(1, location.y / max(1, geo.size.height)))
+                )
+                camera.focus(at: normalized)
+                let ring = FocusRingState(position: location)
+                focusRing = ring
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                    if focusRing?.id == ring.id {
+                        withAnimation(.easeOut(duration: 0.3)) { focusRing = nil }
+                    }
+                }
+            }
         }
         .aspectRatio(400.0/640.0, contentMode: .fit)
+    }
+
+    /// Pinch-to-zoom on the live preview. Multiplies the camera's
+    /// videoZoomFactor and clamps to [1, 8] inside the streamer.
+    private var pinchGesture: some Gesture {
+        MagnificationGesture(minimumScaleDelta: 0.02)
+            .onChanged { scale in
+                guard !isViewingStill else { return }
+                if pinchStartZoom == nil { pinchStartZoom = zoomFactor }
+                let proposed = max(1, min(8, (pinchStartZoom ?? 1) * scale))
+                zoomFactor = proposed
+                camera.setZoom(proposed)
+            }
+            .onEnded { _ in pinchStartZoom = nil }
     }
 
     private var lockOverlay: some View {
@@ -519,7 +667,8 @@ struct ContentView: View {
 
     private var bottomBar: some View {
         HStack(alignment: .center, spacing: 36) {
-            // Bottom-left: FX → opens the inline effect editor.
+            // Bottom-left: FX → opens the inline effect editor. Long-press
+            // triggers a 5-frame burst contact sheet.
             CapsuleIconButton(
                 iconAsset: "icon-fx",
                 size: 64,
@@ -529,24 +678,16 @@ struct ContentView: View {
                     editingEffects = true
                 }
             }
+            .onLongPressGesture(minimumDuration: 0.5) {
+                guard !isViewingStill, !burst.isCapturing, !recorder.isRecording else { return }
+                if isCurrentLocked { showPaywall = true; return }
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                burst.start { [weak vm] in vm?.previewImage }
+            }
 
             // Center: shutter when live, save when viewing a still.
-            ShutterButton(
-                mode: isViewingStill ? .save : .capture,
-                accessibilityLabel: isViewingStill ? "Save" : "Capture"
-            ) {
-                if isViewingStill {
-                    if isCurrentLocked { showPaywall = true; return }
-                    guard vm.previewImage != nil else { return }
-                    showExportSheet = true
-                } else {
-                    triggerShutterEffect()
-                    if saveOriginal, let original = camera.fullResFrame {
-                        UIImageWriteToSavedPhotosAlbum(original, nil, nil, nil)
-                    }
-                    vm.captureCurrentFrame(highRes: camera.fullResFrame)
-                }
-            }
+            // Tap = capture, hold = record GIF (live mode only).
+            shutterControl
 
             // Bottom-right: face/sticker → switch front/back camera.
             CapsuleIconButton(
@@ -554,6 +695,60 @@ struct ContentView: View {
                 size: 64,
                 accessibilityLabel: "Switch camera"
             ) { camera.toggleCamera() }
+        }
+    }
+
+    @ViewBuilder
+    private var shutterControl: some View {
+        if isViewingStill {
+            ShutterButton(
+                mode: .save,
+                progress: 0,
+                accessibilityLabel: "Save"
+            ) {
+                if isCurrentLocked { showPaywall = true; return }
+                guard vm.previewImage != nil else { return }
+                showExportSheet = true
+            }
+        } else {
+            ZStack {
+                ShutterButton(
+                    mode: .capture,
+                    progress: recorder.progress,
+                    accessibilityLabel: recorder.isRecording ? "Stop recording" : "Capture"
+                ) {
+                    // Tap behavior: instant capture (only fires when not in
+                    // a hold-record). The longPress gesture below cancels the
+                    // tap if the press lasts long enough.
+                    triggerShutterEffect()
+                    if saveOriginal, let original = camera.fullResFrame {
+                        UIImageWriteToSavedPhotosAlbum(original, nil, nil, nil)
+                    }
+                    vm.captureCurrentFrame(highRes: camera.fullResFrame)
+                }
+                // Long-press gesture = start recording. Released finger ends.
+                // Built as a DragGesture so we can detect press-down + release.
+                .gesture(
+                    LongPressGesture(minimumDuration: 0.45)
+                        .sequenced(before: DragGesture(minimumDistance: 0))
+                        .onChanged { value in
+                            switch value {
+                            case .first(_):
+                                break
+                            case .second(true, _):
+                                if !recorder.isRecording {
+                                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                                    recorder.start()
+                                }
+                            default:
+                                break
+                            }
+                        }
+                        .onEnded { _ in
+                            if recorder.isRecording { recorder.stop() }
+                        }
+                )
+            }
         }
     }
 
@@ -719,6 +914,28 @@ private struct CapsuleIconButton: View {
     }
 }
 
+/// Animated yellow focus ring that fades in fast, settles smaller, then fades out.
+private struct FocusRingView: View {
+    @State private var scale: CGFloat = 1.6
+    @State private var opacity: Double = 0
+    var body: some View {
+        Circle()
+            .strokeBorder(Color(red: 0.99, green: 0.78, blue: 0.27), lineWidth: 1.5)
+            .frame(width: 64, height: 64)
+            .scaleEffect(scale)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    scale = 1.0
+                    opacity = 1.0
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    withAnimation(.easeIn(duration: 0.3)) { opacity = 0 }
+                }
+            }
+    }
+}
+
 private struct GridOverlay: View {
     var body: some View {
         GeometryReader { geo in
@@ -737,25 +954,42 @@ private struct GridOverlay: View {
 private struct ShutterButton: View {
     enum Mode { case capture, save }
     let mode: Mode
+    var progress: Double = 0
     let accessibilityLabel: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             ZStack {
+                // Recording ring fills clockwise from 12 o'clock as progress goes 0→1.
+                if progress > 0 {
+                    Circle()
+                        .trim(from: 0, to: CGFloat(min(1, max(0, progress))))
+                        .stroke(Color.red, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 92, height: 92)
+                }
                 Circle()
-                    .fill(.black)
+                    .fill(progress > 0 ? Color.red : .black)
                     // Same shadow stack scaled for the dark shutter — keeps the
                     // tactile feel consistent with the lighter chrome buttons.
                     .shadow(color: .black.opacity(0.12), radius: 1.35, x: 0, y: 0.67)
                     .shadow(color: .black.opacity(0.25), radius: 1.10, x: 0, y: 2.02)
-                Image(mode == .save ? "icon-save" : "icon-shutter")
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: 38, height: 38)
-                    .foregroundStyle(.white)
-                    .accessibilityHidden(true)
+                if progress > 0 {
+                    // While recording, show a square inside the red disc
+                    // (universal "stop" iconography).
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white)
+                        .frame(width: 28, height: 28)
+                } else {
+                    Image(mode == .save ? "icon-save" : "icon-shutter")
+                        .resizable()
+                        .renderingMode(.template)
+                        .scaledToFit()
+                        .frame(width: 38, height: 38)
+                        .foregroundStyle(.white)
+                        .accessibilityHidden(true)
+                }
             }
             .frame(width: 84, height: 84)
             .contentShape(Rectangle())
@@ -881,6 +1115,11 @@ private extension Array {
 private struct ShareItem: Identifiable {
     let id = UUID()
     let image: UIImage
+}
+
+private struct GIFItem: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 #Preview {

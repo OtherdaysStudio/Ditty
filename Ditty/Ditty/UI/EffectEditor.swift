@@ -15,10 +15,27 @@ struct EffectEditor: View {
     let onCancel: () -> Void
     let onCommit: () -> Void
 
+    @StateObject private var paletteStore = CustomPaletteStore()
+
     @State private var activeParam: FXParam = .diffuse
 
     /// Snapshot taken on appear. If the user taps X we restore these values.
     @State private var snapshot: Snapshot?
+
+    /// Sheet state for the custom-palette builder. nil = sheet hidden.
+    /// .new = build from scratch. .edit(id) = edit an existing user palette.
+    @State private var builder: BuilderTarget? = nil
+
+    private enum BuilderTarget: Identifiable {
+        case new
+        case edit(UserPalette)
+        var id: String {
+            switch self {
+            case .new: return "new"
+            case .edit(let p): return p.id.uuidString
+            }
+        }
+    }
 
     private var supportedParams: [FXParam] {
         let supported = vm.currentSystem().supportedFXParams
@@ -66,6 +83,8 @@ struct EffectEditor: View {
             }
 
             paramPills
+
+            presetRow
 
             actionRow
         }
@@ -203,6 +222,27 @@ struct EffectEditor: View {
                     ) {
                         vm.resetCustomPalette()
                     }
+                    // "+ New" custom palette card.
+                    newPaletteCard
+                    // User-saved palettes — long-press to edit, tap to apply.
+                    ForEach(paletteStore.palettes) { user in
+                        let active = vm.customPalette == user.colors
+                        paletteCard(
+                            title: user.name,
+                            colors: user.colors,
+                            active: active
+                        ) {
+                            vm.customPalette = user.colors
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                        .contextMenu {
+                            Button("Edit") { builder = .edit(user) }
+                            Button("Delete", role: .destructive) {
+                                paletteStore.remove(user.id)
+                                if vm.customPalette == user.colors { vm.resetCustomPalette() }
+                            }
+                        }
+                    }
                     ForEach(PalettePresets.all) { preset in
                         let active = paletteMatchesPreset(preset)
                         paletteCard(
@@ -223,6 +263,41 @@ struct EffectEditor: View {
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.5))
         }
+        .sheet(item: $builder) { target in
+            switch target {
+            case .new:
+                CustomPaletteBuilder(store: paletteStore, editing: nil) { saved in
+                    vm.customPalette = saved.colors
+                }
+            case .edit(let p):
+                CustomPaletteBuilder(store: paletteStore, editing: p) { saved in
+                    vm.customPalette = saved.colors
+                }
+            }
+        }
+    }
+
+    private var newPaletteCard: some View {
+        Button {
+            builder = .new
+        } label: {
+            VStack(spacing: 4) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color.white.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        .frame(width: 64, height: 18)
+                    Image(systemName: "plus")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                Text("New")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .padding(6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Build custom palette")
     }
 
     private func paletteCard(title: String,
@@ -292,6 +367,49 @@ struct EffectEditor: View {
                 }
             }
             .padding(.horizontal, 4)
+        }
+    }
+
+    // MARK: - Preset row (per-system save/reset)
+
+    private var presetRow: some View {
+        let saved = vm.hasPresetForCurrent()
+        return HStack(spacing: 10) {
+            Image(systemName: "bookmark\(saved ? ".fill" : "")")
+                .font(.caption)
+                .foregroundStyle(saved ? Color(red: 0.99, green: 0.78, blue: 0.27) : .white.opacity(0.5))
+            Text(saved ? "Saved \(vm.currentSystem().name) preset" : "\(vm.currentSystem().name) preset")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
+            Spacer()
+            Button {
+                vm.saveCurrentAsPreset()
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            } label: {
+                Text(saved ? "Update" : "Save")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.white, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Save preset for current system")
+            if saved {
+                Button {
+                    vm.resetPreset()
+                } label: {
+                    Text("Reset")
+                        .font(.caption.weight(.regular))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.08), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Reset preset for current system")
+            }
         }
     }
 

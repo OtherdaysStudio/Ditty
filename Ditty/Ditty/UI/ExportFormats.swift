@@ -48,9 +48,14 @@ enum ExportRenderer {
     /// Render `image` into `aspect` by **center-cropping** the source to fill the
     /// canvas — no black bars. Pixels are sampled nearest-neighbor so the chunky
     /// retro grid stays crisp.
+    ///
+    /// `watermark` (when non-nil) draws a small "DITTY · <system>" tag in the
+    /// bottom-right corner. Free users always get the watermark; Pro users
+    /// can opt out via Settings.
     static func render(
         _ image: UIImage,
         aspect: ExportAspect,
+        watermark: String? = nil,
         targetLongEdge: CGFloat = 2048
     ) -> UIImage? {
         guard let cg = image.cgImage else { return nil }
@@ -85,7 +90,47 @@ enum ExportRenderer {
             cgctx.scaleBy(x: 1, y: -1)
             cgctx.draw(cg, in: CGRect(x: drawX, y: canvasH - drawY - drawH, width: drawW, height: drawH))
             cgctx.restoreGState()
+
+            if let mark = watermark, !mark.isEmpty {
+                drawWatermark(in: cgctx, canvasSize: CGSize(width: canvasW, height: canvasH), text: mark)
+            }
         }
+    }
+
+    private static func drawWatermark(in ctx: CGContext, canvasSize: CGSize, text: String) {
+        // Scale the watermark with the canvas so a 9:16 story still gets a
+        // legible-but-small tag. ~2.5% of the long edge feels right.
+        let longEdge = max(canvasSize.width, canvasSize.height)
+        let fontSize = max(12, longEdge * 0.025)
+        let pad: CGFloat = fontSize * 0.6
+
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .semibold),
+            .foregroundColor: UIColor.white
+        ]
+        let attributed = NSAttributedString(string: text, attributes: attrs)
+        let textSize = attributed.size()
+        let bgRect = CGRect(
+            x: canvasSize.width - textSize.width - pad * 2 - fontSize * 0.6,
+            y: canvasSize.height - textSize.height - pad * 1.4,
+            width: textSize.width + pad,
+            height: textSize.height + pad * 0.5
+        )
+
+        // Translucent dark pill behind the text.
+        ctx.saveGState()
+        let path = UIBezierPath(roundedRect: bgRect, cornerRadius: bgRect.height / 2)
+        ctx.addPath(path.cgPath)
+        ctx.setFillColor(UIColor.black.withAlphaComponent(0.4).cgColor)
+        ctx.fillPath()
+        ctx.restoreGState()
+
+        UIGraphicsPushContext(ctx)
+        attributed.draw(at: CGPoint(
+            x: bgRect.minX + pad / 2,
+            y: bgRect.minY + pad / 4
+        ))
+        UIGraphicsPopContext()
     }
 
     private static func pixelDimensions(forRatio ratio: CGFloat, longEdge: CGFloat) -> (CGFloat, CGFloat) {
