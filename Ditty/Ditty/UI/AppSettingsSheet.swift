@@ -318,6 +318,32 @@ struct AppSettingsSheet: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+
+            #if DEBUG
+            divider
+            Button {
+                purchase.debugClearProState()
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Clear Pro state (debug)")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.orange)
+                        Text("Flips isPro=false in memory so you can replay the paywall. Delete the underlying transaction in Xcode → Debug → StoreKit → Manage Transactions for a permanent reset.")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.55))
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer()
+                    Image(systemName: "arrow.uturn.backward.circle")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            #endif
         }
     }
 

@@ -104,4 +104,16 @@ final class PurchaseManager: ObservableObject {
             lastError = error.localizedDescription
         }
     }
+
+    #if DEBUG
+    /// Debug-only: clear locally-cached entitlement state so the paywall
+    /// flow can be exercised without revoking the actual sandbox/StoreKit
+    /// transaction. Re-launching the app (or calling `bootstrap()`) will
+    /// re-read entitlements and flip back to Pro if a real transaction
+    /// still exists. To delete the underlying transaction, use Xcode's
+    /// Debug → StoreKit → Manage Transactions and delete it there.
+    func debugClearProState() {
+        isPro = false
+    }
+    #endif
 }

@@ -20,8 +20,6 @@ struct ContentView: View {
     @State private var showCropEditor = false
     @State private var shutterFlash: Bool = false
     @State private var viewportScale: CGFloat = 1.0
-    @State private var shareItem: UIImage? = nil
-    @State private var recordedGIFURL: URL? = nil
     @State private var showSavedToast = false
     @State private var systemBadgeOpacity: Double = 0
     @State private var dragOffset: CGFloat = 0
@@ -210,30 +208,18 @@ struct ContentView: View {
                 UIImageWriteToSavedPhotosAlbum(rendered, nil, nil, nil)
                 savedCount += 1
                 showToast()
-                // Defer presenting the share sheet until the export sheet has
-                // fully dismissed — chaining two `.sheet(item:)` modifiers
-                // alongside `.sheet(isPresented:)` race-conditions otherwise
-                // (the share sheet flickers open/closed in a loop).
+                // UIKit-presented share sheet — fires after the export sheet
+                // has fully dismissed. SwiftUI's multi-sheet stack races; the
+                // UIWindow path doesn't.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                    shareItem = rendered
+                    SharePresenter.present([rendered])
                 }
             }
             .presentationDetents([.medium])
         }
-        .sheet(item: Binding(
-            get: { shareItem.map { ShareItem(image: $0) } },
-            set: { shareItem = $0?.image }
-        )) { item in
-            ShareSheet(items: [item.image])
-                .presentationDetents([.medium, .large])
-        }
-        .sheet(item: Binding(
-            get: { recordedGIFURL.map { GIFItem(url: $0) } },
-            set: { recordedGIFURL = $0?.url }
-        )) { item in
-            ShareSheet(items: [item.url])
-                .presentationDetents([.medium, .large])
-        }
+        // Share sheets are presented via UIKit (SharePresenter) to avoid
+        // SwiftUI's flaky multi-sheet-stack behavior. See onChange handlers
+        // below — they fire when shareItem / recordedGIFURL flip non-nil.
         .task {
             vm.respectImageRatio = respectImageRatio
             await purchase.bootstrap()
@@ -296,20 +282,18 @@ struct ContentView: View {
         .onReceive(vm.$previewImage.compactMap { $0 }) { image in
             recorder.appendIfNeeded(image)
         }
-        // Once a GIF finishes encoding, kick off the share sheet (after a
-        // brief delay so any other dismissing sheet has fully unmounted).
+        // Once a GIF finishes encoding, present the share sheet via UIKit.
+        // Brief delay so any other dismissing sheet has fully unmounted.
         .onReceive(recorder.$lastEncodedURL.compactMap { $0 }) { url in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                recordedGIFURL = url
+                SharePresenter.present([url])
                 recorder.consumeLastEncodedURL()
             }
         }
-        // When the burst completes, drop the user into the share sheet.
-        // Tiny delay matches the export → share handoff so SwiftUI doesn't
-        // race two sheet bindings.
+        // Burst contact sheet → share via UIKit too.
         .onReceive(burst.$contactSheet.compactMap { $0 }) { image in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                shareItem = image
+                SharePresenter.present([image])
                 burst.consumeContactSheet()
             }
         }
@@ -840,8 +824,6 @@ struct ContentView: View {
         vm.customPalette = nil
         zoomFactor = 1.0
         camera.setZoom(1.0)
-        shareItem = nil
-        recordedGIFURL = nil
         // Re-sync @AppStorage values to their declared defaults.
         saveOriginal = false
         shutterSound = true
@@ -1185,17 +1167,6 @@ private extension Array {
     }
 }
 
-/// Lightweight Identifiable wrapper so the share sheet's `.sheet(item:)` can
-/// reuse the same UIImage value type without forcing UIImage to be Identifiable.
-private struct ShareItem: Identifiable {
-    let id = UUID()
-    let image: UIImage
-}
-
-private struct GIFItem: Identifiable {
-    let id = UUID()
-    let url: URL
-}
 
 #Preview {
     ContentView()
