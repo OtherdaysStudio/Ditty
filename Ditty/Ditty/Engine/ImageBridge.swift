@@ -43,7 +43,12 @@ enum ImageBridge {
                              target: DithertronSettings,
                              cropRect: CGRect? = nil,
                              useSaliency: Bool = true) -> (pixels: [UInt32], width: Int, height: Int)? {
-        guard var cg = image.cgImage else { return nil }
+        // UIImage stores rotation as metadata. `.cgImage` returns the raw
+        // bitmap without applying it — so a portrait photo taken with the
+        // phone upright shows up as a landscape buffer with
+        // `imageOrientation == .right`. Normalize once before any cropping
+        // so downstream math works in display coordinates.
+        guard var cg = uprightCGImage(from: image) else { return nil }
         if let r = cropRect {
             let imgW = CGFloat(cg.width), imgH = CGFloat(cg.height)
             let cropped = CGRect(
@@ -112,6 +117,27 @@ enum ImageBridge {
             pixels[i] = r | (g << 8) | (b << 16)
         }
         return (pixels, w, h)
+    }
+
+    /// Return a CGImage with EXIF orientation already applied — i.e. a
+    /// bitmap whose pixel layout matches what the user sees on screen.
+    /// Skips the redraw when the image is already upright.
+    private static func uprightCGImage(from image: UIImage) -> CGImage? {
+        guard let raw = image.cgImage else { return nil }
+        if image.imageOrientation == .up { return raw }
+        // Render into a context sized to the orientation-corrected bounds.
+        // UIGraphicsImageRenderer respects `imageOrientation` automatically
+        // when we draw the source UIImage (not the raw CGImage).
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = (image.cgImage?.alphaInfo == .none ||
+                         image.cgImage?.alphaInfo == .noneSkipLast ||
+                         image.cgImage?.alphaInfo == .noneSkipFirst)
+        let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
+        let upright = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
+        return upright.cgImage
     }
 
     /// Build a CGImage from the engine's pixel buffer.

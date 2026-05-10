@@ -21,6 +21,8 @@ struct CropEditorSheet: View {
     @State private var normalizedRect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)
     /// Snapshot at gesture start so deltas don't accumulate as the user drags.
     @State private var dragStart: CGRect?
+    /// Snapshot at the start of a pinch so scale deltas don't compound.
+    @State private var pinchStart: CGRect?
 
     var body: some View {
         NavigationStack {
@@ -107,13 +109,39 @@ struct CropEditorSheet: View {
                                 .offset(x: rectX, y: rectY)
                         )
                 )
+                .allowsHitTesting(false)
 
-            Rectangle()
-                .strokeBorder(Color.white, lineWidth: 1.5)
-                .frame(width: rectW, height: rectH)
-                .offset(x: rectX, y: rectY)
-                .gesture(
-                    DragGesture()
+            // Inner draggable area + visible stroke. The whole interior
+            // accepts gestures (drag to reposition, pinch to resize). The
+            // stroke is purely cosmetic on top.
+            ZStack {
+                Color.white.opacity(0.001) // tappable transparent fill
+                Rectangle()
+                    .strokeBorder(Color.white, lineWidth: 1.5)
+                    .allowsHitTesting(false)
+                // Rule-of-thirds guides — fade in only while the user is
+                // actively dragging or pinching.
+                if dragStart != nil || pinchStart != nil {
+                    Path { p in
+                        p.move(to: CGPoint(x: rectW / 3, y: 0))
+                        p.addLine(to: CGPoint(x: rectW / 3, y: rectH))
+                        p.move(to: CGPoint(x: 2 * rectW / 3, y: 0))
+                        p.addLine(to: CGPoint(x: 2 * rectW / 3, y: rectH))
+                        p.move(to: CGPoint(x: 0, y: rectH / 3))
+                        p.addLine(to: CGPoint(x: rectW, y: rectH / 3))
+                        p.move(to: CGPoint(x: 0, y: 2 * rectH / 3))
+                        p.addLine(to: CGPoint(x: rectW, y: 2 * rectH / 3))
+                    }
+                    .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                    .allowsHitTesting(false)
+                }
+            }
+            .frame(width: rectW, height: rectH)
+            .offset(x: rectX, y: rectY)
+            .contentShape(Rectangle())
+            .gesture(
+                SimultaneousGesture(
+                    DragGesture(minimumDistance: 0)
                         .onChanged { g in
                             if dragStart == nil { dragStart = normalizedRect }
                             let start = dragStart ?? normalizedRect
@@ -127,8 +155,33 @@ struct CropEditorSheet: View {
                                 height: start.height
                             )
                         }
-                        .onEnded { _ in dragStart = nil }
+                        .onEnded { _ in dragStart = nil },
+                    MagnificationGesture()
+                        .onChanged { scale in
+                            if pinchStart == nil { pinchStart = normalizedRect }
+                            let start = pinchStart ?? normalizedRect
+                            // Inverse: pinch-out enlarges the crop window
+                            // (which means LESS zoom on the subject); most
+                            // photo editors do it this way.
+                            let factor = max(0.2, min(5, 1 / scale))
+                            let newW = max(0.05, min(1, start.width * factor))
+                            let newH = max(0.05, min(1, start.height * factor))
+                            // Keep the rect's center where it was so the
+                            // user's focal subject doesn't slide off-screen.
+                            let cx = start.minX + start.width / 2
+                            let cy = start.minY + start.height / 2
+                            var newX = cx - newW / 2
+                            var newY = cy - newH / 2
+                            newX = max(0, min(1 - newW, newX))
+                            newY = max(0, min(1 - newH, newY))
+                            normalizedRect = CGRect(
+                                x: newX, y: newY,
+                                width: newW, height: newH
+                            )
+                        }
+                        .onEnded { _ in pinchStart = nil }
                 )
+            )
         }
         .frame(width: imgW, height: imgH)
     }

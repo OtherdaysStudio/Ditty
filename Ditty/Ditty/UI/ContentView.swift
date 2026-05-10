@@ -725,12 +725,28 @@ struct ContentView: View {
             // Tap = capture, hold = record GIF (live mode only).
             shutterControl
 
-            // Bottom-right: face/sticker → switch front/back camera.
-            CapsuleIconButton(
-                iconAsset: "icon-gallery", // sticker-smile asset
-                size: 64,
-                accessibilityLabel: "Switch camera"
-            ) { camera.toggleCamera() }
+            // Bottom-right: switches camera while live; becomes a Crop
+            // shortcut once the user is viewing a still — flipping the
+            // camera mid-edit makes no sense and accidentally tossed work.
+            if isViewingStill {
+                CapsuleIconButton(
+                    iconAsset: "icon-gallery", // reuse for now — same chrome
+                    size: 64,
+                    accessibilityLabel: "Crop"
+                ) { showCropEditor = true }
+                .overlay(
+                    Image(systemName: "crop")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Color.black.opacity(0.7))
+                        .allowsHitTesting(false)
+                )
+            } else {
+                CapsuleIconButton(
+                    iconAsset: "icon-gallery",
+                    size: 64,
+                    accessibilityLabel: "Switch camera"
+                ) { camera.toggleCamera() }
+            }
         }
     }
 
@@ -764,7 +780,10 @@ struct ContentView: View {
                 }
                 // Long-press gesture = start recording. Released finger ends.
                 // Built as a DragGesture so we can detect press-down + release.
-                .gesture(
+                // `simultaneousGesture` lets the Button's tap action still
+                // fire — `gesture` was eating it, which is why the shutter
+                // flash + viewport scale stopped triggering on quick taps.
+                .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.45)
                         .sequenced(before: DragGesture(minimumDistance: 0))
                         .onChanged { value in
