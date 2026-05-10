@@ -160,15 +160,12 @@ struct ContentView: View {
             AppSettingsSheet(
                 purchase: purchase,
                 presetStore: vm.presetStore,
-                paletteStore: vm.paletteStore,
-                favorites: favorites,
                 saveOriginal: $saveOriginal,
                 showGrid: $showGrid,
                 shutterSound: $shutterSound,
                 respectImageRatio: $respectImageRatio,
                 watermarkEnabled: $watermarkEnabled,
-                savedCount: savedCount,
-                onResetApp: resetApp
+                savedCount: savedCount
             )
         }
         .sheet(isPresented: $showCropEditor) {
@@ -824,27 +821,6 @@ struct ContentView: View {
                     .padding(.top, 8)
             }
         }
-    }
-
-    /// Coordinated in-memory cleanup after Settings → Reset Ditty wipes
-    /// UserDefaults. Clears the loaded photo, drops the shareable buffers,
-    /// resets the camera zoom, and resets in-memory @AppStorage-backed
-    /// state to its default values so the user doesn't have to wait for
-    /// the kill+relaunch to see things reset.
-    private func resetApp() {
-        vm.sourceImage = nil
-        vm.resumeLive()
-        vm.customPalette = nil
-        zoomFactor = 1.0
-        camera.setZoom(1.0)
-        // Re-sync @AppStorage values to their declared defaults.
-        saveOriginal = false
-        shutterSound = true
-        showGrid = false
-        savedCount = 0
-        respectImageRatio = true
-        watermarkEnabled = true
-        didShowOnboarding = false
     }
 
     private func showToast() {
