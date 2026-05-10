@@ -729,17 +729,11 @@ struct ContentView: View {
             // shortcut once the user is viewing a still — flipping the
             // camera mid-edit makes no sense and accidentally tossed work.
             if isViewingStill {
-                CapsuleIconButton(
-                    iconAsset: "icon-gallery", // reuse for now — same chrome
+                CapsuleSymbolButton(
+                    systemName: "crop",
                     size: 64,
                     accessibilityLabel: "Crop"
                 ) { showCropEditor = true }
-                .overlay(
-                    Image(systemName: "crop")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(Color.black.opacity(0.7))
-                        .allowsHitTesting(false)
-                )
             } else {
                 CapsuleIconButton(
                     iconAsset: "icon-gallery",
@@ -979,6 +973,33 @@ private struct CapsuleIconButton: View {
                     .renderingMode(.original)
                     .scaledToFit()
                     .frame(width: size * 0.5, height: size * 0.5)
+                    .accessibilityHidden(true)
+            }
+            .frame(width: size, height: size)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityIdentifier(accessibilityLabel)
+    }
+}
+
+/// Same chrome as CapsuleIconButton but renders an SF Symbol instead of an
+/// asset-catalog image — used when we don't have a bespoke asset for the
+/// state (e.g. the still-photo Crop button).
+private struct CapsuleSymbolButton: View {
+    let systemName: String
+    let size: CGFloat
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                DittyButtonChrome(size: size)
+                Image(systemName: systemName)
+                    .font(.system(size: size * 0.36, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.78))
                     .accessibilityHidden(true)
             }
             .frame(width: size, height: size)
