@@ -7,15 +7,23 @@ import StoreKit
 struct AppSettingsSheet: View {
     @ObservedObject var purchase: PurchaseManager
     @ObservedObject var presetStore: SystemFXPresetStore
+    @ObservedObject var paletteStore: CustomPaletteStore
+    @ObservedObject var favorites: SystemFavorites
     @Binding var saveOriginal: Bool
     @Binding var showGrid: Bool
     @Binding var shutterSound: Bool
     @Binding var respectImageRatio: Bool
     @Binding var watermarkEnabled: Bool
     let savedCount: Int
+    /// Coordinated reset of every observable state the user can mutate.
+    /// Closure so AppSettingsSheet doesn't need direct access to the view
+    /// model's @AppStorage values.
+    let onResetApp: () -> Void
 
     @State private var showPaywall = false
     @State private var showShareSheet = false
+    @State private var showResetConfirm = false
+    @State private var showResetDone = false
     @Environment(\.dismiss) private var dismiss
 
     /// System-id → display-name map so Preset Management can show "Game Boy"
@@ -33,6 +41,7 @@ struct AppSettingsSheet: View {
                     usageSection
                     presetsSection
                     contactSection
+                    dangerSection
                     Text("Ditty · v1.1")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -41,6 +50,17 @@ struct AppSettingsSheet: View {
                 .frame(maxWidth: 540)
                 .frame(maxWidth: .infinity)
                 .padding(20)
+            }
+            .alert("Reset Ditty?", isPresented: $showResetConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Reset", role: .destructive) { performReset() }
+            } message: {
+                Text("Wipes onboarding, saved presets, custom palettes, favorites, and counters. Pro purchases are not affected — restore them from the App Store. Force-quit and reopen the app for a true cold launch.")
+            }
+            .alert("Ditty reset", isPresented: $showResetDone) {
+                Button("OK") { dismiss() }
+            } message: {
+                Text("Now force-quit Ditty (swipe up from the home indicator and flick the Ditty card up) and reopen for a fresh launch.")
             }
             .background(Color.black.ignoresSafeArea())
             .navigationTitle("Settings")
@@ -270,6 +290,62 @@ struct AppSettingsSheet: View {
             divider
             row(label: "Share Ditty", trailing: chevron) { showShareSheet = true }
         }
+    }
+
+    // MARK: - Danger / reset
+
+    private var dangerSection: some View {
+        sectionCard(header: "RESET") {
+            Button(role: .destructive) {
+                showResetConfirm = true
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reset Ditty")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.red)
+                        Text("Wipes all local state and sends you back to first launch.")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.55))
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer()
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.red)
+                }
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func performReset() {
+        // Stores wipe their own UserDefaults blob + in-memory state.
+        presetStore.resetAll()
+        paletteStore.resetAll()
+        favorites.resetAll()
+
+        // Toggles + counters owned by ContentView's @AppStorage. Removing
+        // the keys directly is fine — @AppStorage falls back to the
+        // declared default on the next read.
+        let prefs: [String] = [
+            "ditty.saveOriginal",
+            "ditty.shutterSound",
+            "ditty.showGrid",
+            "ditty.savedCount",
+            "ditty.respectImageRatio",
+            "ditty.watermark",
+            "ditty.didShowOnboarding",
+        ]
+        for key in prefs {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        // Ask ContentView to apply its own in-memory cleanup (clears the
+        // photo, returns to live mode, etc.).
+        onResetApp()
+        showResetDone = true
     }
 
     // MARK: - Helpers

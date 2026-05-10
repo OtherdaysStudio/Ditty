@@ -48,6 +48,12 @@ final class CustomPaletteStore: ObservableObject {
         persist()
     }
 
+    /// Wipe every saved palette. Used by Settings → Reset Ditty.
+    func resetAll() {
+        palettes.removeAll()
+        UserDefaults.standard.removeObject(forKey: CustomPaletteStore.key)
+    }
+
     private func persist() {
         if let data = try? JSONEncoder().encode(palettes) {
             UserDefaults.standard.set(data, forKey: CustomPaletteStore.key)

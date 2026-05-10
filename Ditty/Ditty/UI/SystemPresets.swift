@@ -41,6 +41,12 @@ final class SystemFXPresetStore: ObservableObject {
         presets[systemId]
     }
 
+    /// Wipe every saved preset. Used by Settings → Reset Ditty.
+    func resetAll() {
+        presets.removeAll()
+        UserDefaults.standard.removeObject(forKey: SystemFXPresetStore.key)
+    }
+
     private func persist() {
         if let data = try? JSONEncoder().encode(presets) {
             UserDefaults.standard.set(data, forKey: SystemFXPresetStore.key)

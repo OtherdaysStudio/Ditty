@@ -21,4 +21,10 @@ final class SystemFavorites: ObservableObject {
     }
 
     func contains(_ id: String) -> Bool { ids.contains(id) }
+
+    /// Wipe every favorite. Used by Settings → Reset Ditty.
+    func resetAll() {
+        ids.removeAll()
+        UserDefaults.standard.removeObject(forKey: SystemFavorites.key)
+    }
 }
